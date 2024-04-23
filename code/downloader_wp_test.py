@@ -195,7 +195,10 @@ def get_modis_timestep(path_modis, start_date, end_date, tiles, n_threads, _user
     
     '''get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
     there is no need for now to download the daily data'''
-        
+    
+    n_threads = 6
+    _username, _password = read_config_cred()
+    
     delta = timedelta(days=8)
 
     # Initialize a list with the first date also as datetime

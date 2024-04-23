@@ -226,27 +226,25 @@ def get_modis_downloader(products, start_date, end_date, site_directory, site_ar
     for i in tqdm(range(len(products))):
         
         '''loop over all the MODIS product to be downloaded'''
-        
-        for tile in format_tiles:
-            
-            if products[i]['product'] == 'MCD43A3.061':
+                   
+        if products[i]['product'] == 'MCD43A3.061':
 
-                get_modis_downloader(products, start_date, end_date, site_directory, site_area, tile)
-                
-                continue
-            
-            else: 
+            get_modis_timestep (products, start_date, end_date, site_directory, site_area, format_tiles)
 
-                print(products[i]['product'])
-                print(f'start_date:{start_date}')
-                print(f'end_date:{end_date}')
+            continue
 
-                # Set the date strings as datetime.datetime so that get_modis_data works 
-                get_modis_data(products[i]['platform'], products[i]['product'], tile, 
-                               path_modis + f"/{products[i]['product']}/", 
-                               start_date, end_date, n_threads, _username, _password)
+        else: 
 
-            LOG.info(f"MODIS {products[i]['product']} download complete for {site_area}-{tile}")
+            print(products[i]['product'])
+            print(f'start_date:{start_date}')
+            print(f'end_date:{end_date}')
+
+            # Set the date strings as datetime.datetime so that get_modis_data works 
+            get_modis_data(products[i]['platform'], products[i]['product'], format_tiles, 
+                           path_modis + f"/{products[i]['product']}/", 
+                           start_date, end_date, n_threads, _username, _password)
+
+        LOG.info(f"MODIS {products[i]['product']} download complete for {site_area}-{format_tiles}")
         
 def sentinel_file_checker(path_sentinel, site_area):
     

@@ -191,7 +191,7 @@ def update_config(dst_config, site_area, tiles, polygon, country):
         
     LOG.info(f'Config file has been created and saved here {dst_config}')
     
-def get_modis_timestep(path_modis, start_date, end_date, tiles, n_threads, _username, _password ):
+def get_modis_timestep(path_modis, start_date, end_date, format_tiles):
     
     '''get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
     there is no need for now to download the daily data'''
@@ -209,8 +209,8 @@ def get_modis_timestep(path_modis, start_date, end_date, tiles, n_threads, _user
     # Get the data
     for t in l:
         print (t)
-        get_modis_data('MOTA', 'MCD43A3.061', format_string(tiles[0]), 
-                       path_modis + '/MCD43A3.061/', t,
+        get_modis_data('MOTA', 'MCD43A3.061', format_tiles, 
+                       path_modis + '/MCD43A3.061/', t, 
                        t, n_threads, _username, _password)  
     
     
@@ -232,7 +232,7 @@ def get_modis_downloader(products, start_date, end_date, site_directory, site_ar
                    
         if products[i]['product'] == 'MCD43A3.061':
 
-            get_modis_timestep (products, start_date, end_date, site_directory, site_area, format_tiles)
+            get_modis_timestep (path_modis, start_date, end_date, format_tiles)
 
             continue
 

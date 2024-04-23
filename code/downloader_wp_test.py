@@ -335,7 +335,8 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
             
             else:
                 # Find the end of the month
-                j_end = (j.year, j.month, calendar.monthrange(j.year, j.month)[1])
+                j_end = (j.year, j.month, calendar.monthrange(j.year, j.month)[1]) # tuple format
+                j_end = datetime(*j_end).date() # unpacks the tuple into datetime arguments 
 
                 # run sentinel downloaders per month 
                 sd = SentinelDownloader(geojson_path, j, j_end)

@@ -1,0 +1,63 @@
+- site_area: 
+  country: 
+  start_date: '2015-01-01'
+  end_date: '2017-04-01'
+  tiles: []
+  bbox:
+  
+  # MODIS
+- products:
+  - name: Land Surface Temperature (LST)
+    product: MYD11A1.061
+    platform: MOLA
+    scaling_factor: '0.02'
+    qa_def: ['QC_Day','QC_Night']
+    data_var: ['LST_Day_1km', 'LST_Night_1km']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+  - name: Enhance Vegetation Index (EVI)
+    product: MOD13A2.061
+    platform: MOLT
+    scaling_factor: '0.0001'
+    qa_def: ['1_km_16_days_VI_Quality']
+    data_var: ['1_km_16_days_EVI']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+  - name: Leaf Area Index (LAI)
+    product: MCD15A2H.061
+    platform: MOTA
+    scaling_factor: '0.1'
+    qa_def: ['FparLAI_QC']
+    data_var: ['Lai_500m']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+  - name: Albedo
+    product: MCD43A3.061
+    platform: MOTA
+    scaling_factor: '0.001'
+    qa_def: ['BRDF_Albedo_Band_Mandatory_Quality_Band2']
+    data_var: ['Albedo_WSA_Band2']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+  - name: Net EvapoTranspiration (ET)
+    product: MOD16A2GF.061
+    platform: MOLT
+    scaling_factor: '0.1'
+    qa_def: ['ET_QC_500m']
+    data_var: ['ET_500m']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+  - name: Burned Areas (BA)
+    product: MCD64A1.061
+    platform: MOTA
+    qa_def: ['QA']
+    data_var: ['Burn Date']
+  - name: Fpar
+    product: MCD15A3H.061
+    platform: MOTA
+    scaling_factor: '0.01'
+    qa_def: ['FparLAI_QC']
+    data_var: ['Fpar_500m']
+    smooth_method: 'smoothn'
+    smooth_factor: '0.5'
+    

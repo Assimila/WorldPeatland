@@ -294,7 +294,8 @@ def generate_dates(start_date, end_date):
     
     ''' 
     generate_dates will generate the first day of the start month and then every first day of 
-    the month until reaching the end date 
+    the month until reaching the end date (exactly like the calendar, this list will be used 
+    as a reference) 
     
     INPUTS
         - start_date (datetime.date) - set by user
@@ -312,13 +313,33 @@ def generate_dates(start_date, end_date):
         else:
             month += 1
             
-def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
+def check_dates(start_date,end_date, sentinel_start_date):
     
+    # for s1 downloaders
+    if start_date and end_date < sentinel_start_date:
+        LOG.info(f'No Sentinel 1 data available between these dates {start_date} and {end_date}')
+        start_date = 0 
+        end_date = 0
+    elif start_date < sentinel_start_date and end_date > sentinel_start_date:
+        # set the _start_date to be equal to the sentinel data availability
+        LOG.info(f'Sentinel data is only available after {sentinel_start_date}')
+        start_date = sentinel_start_date
+    return start_date, end_date    
+            
+def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
+
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
     
     # get the list of dates already downloaded 
     dt_l = sentinel_file_checker(path_sentinel, site_area)
+    
+    s2_start_date = datetime.strptime('2017-03-28', '%Y-%m-%d')
+    start_date, end_date = check_dates(start_date,end_date, s2_start_date)
+    
+    if start_date == 0:
+        LOG.error(f'Please input dates more than {s2_start_date} to obtain sentinel data')
+        return
     
     if dt_l != 0:
         
@@ -338,7 +359,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
                 j_end = (j.year, j.month, calendar.monthrange(j.year, j.month)[1]) # tuple format
                 j_end = datetime(*j_end).date() # unpacks the tuple into datetime arguments 
 
-                # run sentinel downloaders per month 
+                # run sentinel downloaders per month  
                 sd = SentinelDownloader(geojson_path, j, j_end)
                 new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')    
@@ -362,7 +383,10 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
         LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
         
     # remove all rawdata after datacube created
-    shutil.rmtree(path_sentinel + '/rawdata/')
+    if os.path.exists(path_sentinel + '/rawdata/'): 
+        
+        # if the file exist remove it
+        shutil.rmtree(path_sentinel + '/rawdata/')
 
 def get_viirs_archive(start_date, country, site_area, site_directory):
     
@@ -458,17 +482,20 @@ def main(geojson_path, output_dir):
     # update the new config created with the data from geojson 
     update_config(dst_config, site_area, format_tiles, polygon, country)
 
-    LOG.info(f'Starting to download MODIS data for {site_area}')
+    
     
     # set date strings as datetime objects both get_modis and get_sentinel will need it as datetime object
     _start_date = datetime.strptime(start_date, '%Y-%m-%d')
     _end_date = datetime.strptime(end_date, '%Y-%m-%d')
     
+    # sentinel data availability dates from this link
+    # https://developers.google.com/earth-engine/datasets/catalog/sentinel
+  
+    LOG.info(f'Starting to download MODIS data for {site_area}')
     get_modis_downloader(products, _start_date, _end_date, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')  
-    
-    
+
     get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path)
     
     get_viirs_archive(start_date, country, site_area, site_directory)

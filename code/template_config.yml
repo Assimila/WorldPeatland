@@ -1,7 +1,7 @@
 - site_area: 
   country: 
-  start_date: '2015-01-01'
-  end_date: '2017-04-01'
+  start_date: '2022-06-01' # 'yyyy-mm-dd'
+  end_date: '2022-06-30'  # 'yyyy-mm-dd'
   tiles: []
   bbox:
   
@@ -12,52 +12,58 @@
     platform: MOLA
     scaling_factor: '0.02'
     qa_def: ['QC_Day','QC_Night']
-    data_var: ['LST_Day_1km', 'LST_Night_1km']
+    data_var: ['_LST_Day_1km', '_LST_Night_1km']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '365'
   - name: Enhance Vegetation Index (EVI)
     product: MOD13A2.061
     platform: MOLT
     scaling_factor: '0.0001'
-    qa_def: ['1_km_16_days_VI_Quality']
-    data_var: ['1_km_16_days_EVI']
+    qa_def: ['_1_km_16_days_VI_Quality']
+    data_var: ['_1_km_16_days_EVI']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '23'
   - name: Leaf Area Index (LAI)
-    product: MCD15A2H.061
+    product: MCD15A3H.061
     platform: MOTA
-    scaling_factor: '0.1'
-    qa_def: ['FparLAI_QC']
-    data_var: ['Lai_500m']
+    scaling_factor: ['0.1', '0.01']
+    qa_def: ['FparLai_QC', 'FparLai_QC']
+    data_var: ['_Lai_500m', '_Fpar_500m']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '92'
   - name: Albedo
     product: MCD43A3.061
     platform: MOTA
     scaling_factor: '0.001'
     qa_def: ['BRDF_Albedo_Band_Mandatory_Quality_Band2']
-    data_var: ['Albedo_WSA_Band2']
+    data_var: ['_Albedo_WSA_Band2']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '23'
   - name: Net EvapoTranspiration (ET)
     product: MOD16A2GF.061
     platform: MOLT
     scaling_factor: '0.1'
     qa_def: ['ET_QC_500m']
-    data_var: ['ET_500m']
+    data_var: ['_ET_500m']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '45'
   - name: Burned Areas (BA)
     product: MCD64A1.061
     platform: MOTA
     qa_def: ['QA']
     data_var: ['Burn Date']
-  - name: Fpar
-    product: MCD15A3H.061
-    platform: MOTA
-    scaling_factor: '0.01'
-    qa_def: ['FparLAI_QC']
-    data_var: ['Fpar_500m']
-    smooth_method: 'smoothn'
-    smooth_factor: '0.5'
+#   - name: Fpar
+#     product: MCD15A3H.061
+#     platform: MOTA
+#     scaling_factor: '0.01'
+#     qa_def: ['FparLai_QC']
+#     data_var: ['_Fpar_500m']
+#     smooth_method: 'smoothn'
+#     smooth_factor: '0.5'
+#     period: '92'
     

@@ -173,23 +173,23 @@ def process_MLEONN(data, config_fname, dts, ys, xs, saved_path, tile_name, data_
     ds_linear.attrs['crs'] = proj4_utm
     
     # 5.Save as utm TIFF
-    output_path = os.path.join(saved_path, f'{data_type}_{tile_name}_smoothn_utm.tif')
-    save_xarray_old(output_path, ds_linear, f'{data_type}_smooth')
+    output_utm = os.path.join(saved_path, f'{data_type}_{tile_name}_smoothn_utm.tif')
+    save_xarray_old(output_utm, ds_linear, f'{data_type}_smooth')
 
     # 6.If data is LAI, resample to 10 by 10 pixel size
     proj4_string = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs'
     # change projection from utm to sinusoidal 
-    output_raster = os.path.join(saved_path, f'{data_type}_{tile_name}_smoothn_sinusoidal_resampled.tif')
-    ds = gdal.Open(output_path)
+    output_sinu = os.path.join(saved_path, f'{data_type}_{tile_name}_smoothn_sinusoidal_resampled.tif')
+    ds = gdal.Open(output_utm)
 
     # reproject to sinusoidal and resample to 10 by 10 pixel size
-    dsReprj = gdal.Warp(output_raster, ds, dstSRS=proj4_string, xRes = 10, yRes = 10)
+    dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes = 10, yRes = 10)
     ds = dsReprj = None # close the files
     LOG.info(f'{data_type}_resampled and saved')
         
     
     # 8.Delete UTM files
-    os.remove(output_path)
+    os.remove(output_utm)
 
 
 def main(geojson_path, output_dir):

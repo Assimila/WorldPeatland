@@ -132,7 +132,7 @@ def transform_save(ds, orbit, saved_path):
     # ==>> maybe try to to save xarray with many variables for each orbit. 
     'ex: ascending orbit has an xarray with cross ratio, VV and VH'
     output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
-    save_xarray_old(output_utm, ds, 'cr')
+#     save_xarray_old(output_utm, ds, 'cr')
     
     # change projection from utm to sinusoidal 
     output_sinu = saved_path + f'/cross_ratio_{orbit}_sinusoidal_resampled.tif'
@@ -168,24 +168,28 @@ def main(geojson_path, output_dir):
         ds_cr.attrs['crs'] = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs '
 
         saved_path = create_dir(f'{output_dir}{tile_name}/Sentinel/', 'CrossRatio')
+        
+        output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
+        save_xarray_old(output_utm, ds, 'cr')
 
-        output_sinu = transform_save(ds_cr, orbit, saved_path)
-        LOG.info(f'Cross Ratio for {orbit} has been saved here {saved_path}')
+        # change projection from utm to sinusoidal
+#         output_sinu = transform_save(ds_cr, orbit, saved_path)
+#         LOG.info(f'Cross Ratio for {orbit} has been saved here {saved_path}')
 
-        # Create an xarray to be able to perform smoothn 
-        arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
-        ds = create_xarr(saved_opn, 'cr', arr, dts)
+#         # Create an xarray to be able to perform smoothn 
+#         arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
+#         ds = create_xarr(saved_opn, 'cr', arr, dts)
 
         # smoothn return first the smoothend data and some other quality data...
-        s_smoothn = smoothn(y=ds['cr'], isrobust=True, axis=0)[0]
+        s_smoothn = smoothn(y=ds_cr['cr'], isrobust=True, axis=0)[0]
 
         # Save pixel level data final output after processing into geotif
         ds_s = create_xarr(saved_opn, 'cr_smooth', s_smoothn, dts)
 
-        # add the crs as attribute 
-        ds_s.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
+#         # add the crs as attribute 
+#         ds_s.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
 
-        fname = saved_path + f'/cross_ratio_{orbit}_sinusoidal_resampled_smoothn.tif'
+        fname = saved_path + f'/cross_ratio_{orbit}_utm_resampled_smoothn.tif'
         save_xarray_old(fname, ds_s, f'cr_smooth')
         LOG.info(f'Cross Ratio Smoothened for {orbit} has been saved here fname')
 

@@ -22,6 +22,9 @@ from TATSSI.notebooks.helpers.time_series_interpolation import \
         TimeSeriesInterpolation
 
 
+''' apply_qa its the 3rd code to run will apply the qa settings to the MODIS data time series generated in code 2 then it will INTERPOLATE the cleaned time series'''
+
+
 def main(directory, site_name):
     
     qa_path = "/home/ysarrouh/WorldPeatlands/QA_settings/"
@@ -47,12 +50,13 @@ def main(directory, site_name):
 
         _data_var_list = products[i]['data_var'] 
         qa_def_list = products[i]['qa_def'] 
-
+        
         # zip the list to match to the data_var to the corresponding qa_def
         for _data_var, qa_def in zip(_data_var_list, qa_def_list):
 
             # source_dir where the modis data for this product is stored
             source_dir = directory + site_name + '/MODIS/'+ f'{product}.{version}'
+            
             # check if file exists in this directory 
             if not os.path.exists(source_dir):
                 LOG.error(f'A MODIS file does not exist: {source_dir}')

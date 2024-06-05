@@ -19,6 +19,9 @@ from downloader_wp_test import *
 from TATSSI.time_series.generator import Generator  
     
 
+'''ts_generator_wp 2nd script to run, it will generate time series for the MODIS data'''    
+
+    
 # TODO check for existing MODIS time series files 
 # it seems to work only in the UI and not in the scripts
     
@@ -46,36 +49,35 @@ def get_ts(directory, site_name):
         return
     
     # Getting the list of directories 
-    dir = os.listdir(modis_dir) 
+    dir_ = os.listdir(modis_dir) 
 
     # Checking if the list is empty or not 
-    if len(dir) == 0: 
+    if len(dir_) == 0: 
         print(f"This directory {modis_dir} is empty") 
         return 
 
     for i, n in enumerate(dir):
 
-        product_name, version = dir[i].rsplit('.', 1) 
+        product_name, version = dir_[i].rsplit('.', 1) 
         
         output_dir = modis_dir + n
         
-        if product_name == 'MCD64A1':
-            continue # do not create ts for these fire related products
-            
-        else: 
+        # Create for MCD64A1 because the files are in hdf format just 
+        # for the processing to be able to use the data do not apply mask 
+        # later on MCD64A1 with the apply_qa.py
         
-            if os.path.getsize(output_dir) == 0:
-                LOG.error(f'{output_dir} this file is empty')
-                continue
+        if os.path.getsize(output_dir) == 0:
+            LOG.error(f'{output_dir} this file is empty')
+            continue
 
-            # TATSSI Time Series Generator object
-            tsg = Generator(source_dir=output_dir, product=product_name,
-                        version=version, data_format='hdf',
-                        progressBar=None, preprocessed=True)
+        # TATSSI Time Series Generator object
+        tsg = Generator(source_dir=output_dir, product=product_name,
+                    version=version, data_format='hdf',
+                    progressBar=None, preprocessed=True)
 
-            tsg.generate_time_series()
+        tsg.generate_time_series()
 
-            LOG.info(f'time series generated for this product {n}')       
+        LOG.info(f'time series generated for this product {n}')       
         
         
 def main(directory, site_name):

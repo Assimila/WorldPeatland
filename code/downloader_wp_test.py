@@ -23,6 +23,9 @@ from SentinelDownloader import *
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
+'''downloader_wp first script to run: it will download all MODIS, sentinel and VIIRS data for the input geojson file'''
+
+
 def get_polygon(geojson_path):
     '''
     get_polygon function extract bbox layer of a GeoJson file site and gives an osgeo geometry object 
@@ -191,7 +194,7 @@ def update_config(dst_config, site_area, tiles, polygon, country):
         
     LOG.info(f'Config file has been created and saved here {dst_config}')
     
-def get_modis_timestep(path_modis, start_date, end_date, format_tiles):
+def get_modis_timestep(path, start_date, end_date, format_tiles):
     
     '''get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
     there is no need for now to download the daily data'''
@@ -210,18 +213,35 @@ def get_modis_timestep(path_modis, start_date, end_date, format_tiles):
     for t in l:
         print (t)
         get_modis_data('MOTA', 'MCD43A3.061', format_tiles, 
-                       path_modis + '/MCD43A3.061/', t, 
+                       path, t, 
                        t, n_threads, _username, _password)  
+        
+def run_command(cmd: str):
+    """
+    Executes a command in the OS shell
+    :param cmd: command to execute
+    :return N/A:
+    :raise Exception: If command executions fails
+    """
+    # initialize an error msg so if there is no error it will assign a none value to err_msg
+    err_msg= None 
     
+    status = subprocess.call([cmd], shell=True)
+    #os.system(cmd)
+
+    if status != 0:
+        err_msg = f"{cmd} \n Failed"
+        raise Exception(err_msg) 
+        
+    return err_msg
     
-def get_modis_downloader(products, start_date, end_date, site_directory, site_area, format_tiles):
+def get_modis_downloader(products, start_date, end_date, path_modis, site_directory, site_area, format_tiles):
     
     '''this function will loop over the data products to be downloaded and choose accordingly which way to download 
-    the data
-    for albedo we do not need daily data, for now looping seperatly over 8 days timedelta'''
+    the data for albedo we do not need daily data, for now looping seperatly over 8 days timedelta'''
 
-    # create a subdirectory in the site folder to store sentinel data
-    path_modis = create_dir(site_directory, 'MODIS')
+    # create a subdirectory in the site folder to store modis link data
+    path_site_modis = create_dir(site_directory, 'MODIS')
     
     n_threads = 6
     _username, _password = read_config_cred()
@@ -229,25 +249,50 @@ def get_modis_downloader(products, start_date, end_date, site_directory, site_ar
     for i in tqdm(range(len(products))):
         
         '''loop over all the MODIS product to be downloaded'''
+        
+        path_product = create_dir(path_modis, products[i]['product'])
                    
         if products[i]['product'] == 'MCD43A3.061':
-
-            get_modis_timestep (path_modis, start_date, end_date, format_tiles)
-
-            continue
-
+            
+            # loop over all list of tiles to be able to create a file for each tile
+            for tile in format_tiles:
+                path_tile = create_dir(path_product, tile)
+                
+                get_modis_timestep (path_tile, start_date, end_date, tile)
+                
+                path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
+                
+                try:
+                    err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
+                    
+                    if err_msg:
+                        raise Exception(f'Link already exists: {path_site_product}')
+                except Exception as e:
+                    LOG.error(e)
         else: 
 
-            print(products[i]['product'])
-            print(f'start_date:{start_date}')
-            print(f'end_date:{end_date}')
+            for tile in format_tiles:
+                
+                # where the data will be downloaded
+                path_tile = create_dir(path_product, tile)
+                
+                # Set the date strings as datetime.datetime so that get_modis_data works 
+                get_modis_data(products[i]['platform'], products[i]['product'], tile, 
+                               path_tile, 
+                               start_date, end_date, n_threads, _username, _password)
 
-            # Set the date strings as datetime.datetime so that get_modis_data works 
-            get_modis_data(products[i]['platform'], products[i]['product'], format_tiles, 
-                           path_modis + f"/{products[i]['product']}/", 
-                           start_date, end_date, n_threads, _username, _password)
-
-        LOG.info(f"MODIS {products[i]['product']} download complete for {site_area}-{format_tiles}")
+                # where the data will be linked, this is in the site specific modis file 
+                path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
+                
+                try:
+                    err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
+                    
+                    if err_msg:
+                        raise Exception(f'Link already exists: {path_site_product}')
+                except Exception as e:
+                    LOG.error(e)
+                    
+                LOG.info(f"MODIS {products[i]['product']} download complete for {site_area}-{format_tiles}")
         
 def sentinel_file_checker(path_sentinel, site_area):
     
@@ -386,7 +431,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path):
     if os.path.exists(path_sentinel + '/rawdata/'): 
         
         # if the file exist remove it
-        shutil.rmtree(path_sentinel + '/rawdata/')
+        shutil.rmtree(path_sentinel + '/rawdata/') # rmtree function will delete noob and all files and subdirectories below it
 
 def get_viirs_archive(start_date, country, site_area, site_directory):
     
@@ -395,6 +440,10 @@ def get_viirs_archive(start_date, country, site_area, site_directory):
     # create a subdirectory in the site folder to store VIIRS data
     path_viirs = create_dir(site_directory, 'VIIRS')
     
+    if datetime.strptime(start_date, '%Y-%m-%d').year > 2021:
+        LOG.info('Data not available after 2021')
+    
+    # no data available after 2021 (exclusive)
     for y in range(datetime.strptime(start_date, '%Y-%m-%d').year, 2021+1):
 
         url = (f"https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{y}/"
@@ -403,7 +452,7 @@ def get_viirs_archive(start_date, country, site_area, site_directory):
 
         urlretrieve(url, filename)   
         
-    LOG.info(f'VIIRS SNPP data for {site_area} added to {filename}')
+        LOG.info(f'VIIRS SNPP data for {site_area} added to {filename}')
     
 
 def read_config_cred():
@@ -490,9 +539,12 @@ def main(geojson_path, output_dir):
     
     # sentinel data availability dates from this link
     # https://developers.google.com/earth-engine/datasets/catalog/sentinel
+    
+    # create a data/MODIS directory to store all products not in a site specific file
+    path_modis = create_dir(output_dir, 'data/MODIS')
   
     LOG.info(f'Starting to download MODIS data for {site_area}')
-    get_modis_downloader(products, _start_date, _end_date, site_directory, site_area, format_tiles)
+    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')  
 
@@ -510,3 +562,6 @@ if __name__ == "__main__":
         output_dir = sys.argv[2] # location of output downloaded data 3rd item in the list which is the 2nd argument
         main(geojson_path, output_dir)
         
+# you should be in directory where the script is 
+# if you want to change the dates of downloads you should access the template config and change the dates in it
+# example  python downloader_wp_test.py /data/world_peatlands/src/WorldPeatland/sites/Norfolk.geojson /data/world_peatlands/demo/dry_run/

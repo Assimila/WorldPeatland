@@ -19,6 +19,9 @@ import logging
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
+'''smoothing.py is the 4th code to run it will apply the smooth factor from the config file to the cleaned and interpolated time series'''
+
+
 # create console handler and set level to debug
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -44,7 +47,6 @@ def main(directory, site_name):
         product = j['product']
         
         if product == 'MCD64A1.061':
-            #TODO maybe generate the ts but TATSSI will cut for this type of data 
             continue
         
         smoothing_method, s = j['smooth_method'], j['smooth_factor']
@@ -59,8 +61,7 @@ def main(directory, site_name):
             output_fname = f"{base}.{smoothing_method}.{s}.{extension}"
             
             LOG.info(f'smoothing started for {fname} with {smoothing_method} as smoothing method and this factor {s}')
-            
-#             from IPython import embed; shell = embed() 
+              
             smoother = Smoothing(data=None, fname=fname,
                                  output_fname=output_fname,
                                  smoothing_method=smoothing_method,

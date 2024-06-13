@@ -77,7 +77,7 @@ class SentinelDownloader():
     sd.write_raw_files_to_datacube(new_dwn_files,'/data/grip/datacube/')
     """
     
-    def __init__(self, shapefile, start, end, ee_credentials = None):
+    def __init__(self, shapefile, start, end, ee_credentials = None, project = None):
         
         self.shapefile = shapefile
         self.start = start
@@ -88,6 +88,7 @@ class SentinelDownloader():
         self.buffer_meters = 50
         self.override_existing_files = False
         self.write_util_files = True
+        self.project = project
         
         self._ee_auth(ee_credentials)
         
@@ -95,12 +96,15 @@ class SentinelDownloader():
                            'NIR_DRK_THRESH': 0.25,
                            'CLD_PRJ_DIST': 2,
                            'BUFFER': 70}
-        
+
     def _ee_auth(self, ee_credentials):
         
         if ee_credentials is None:
             try:
-                ee.Initialize()
+                if self.project is None:
+                    ee.Initialize()
+                else:
+                    ee.Initialize(project=self.project)
             except Exception as e:
                 ee.Authenticate()
                 ee.Initialize()
@@ -128,6 +132,7 @@ class SentinelDownloader():
             shpt.write_output(outline_utm, reproj)
         
         bbox = shpt.get_wgs84_envelope(buffer_meters=self.buffer_meters)
+
         if self.write_util_files:
             shpt.write_output(bbox, buffered)
         self.epsg_code = shpt.epsg_code
@@ -159,12 +164,18 @@ class SentinelDownloader():
         Method to ingest the freshly downloaded files to a datacube structure.
         """
         for i in new_file_list:
+            
+            print(i)
+
+            print('+++++++++++++++++++++++++++++++++++++++++++++')
+
+
             if 'S1_GRD' in i:
-                self.__make_s1_datacube_geotiffs(i,datacube_root,self.key)
+                self.__make_s1_datacube_geotiffs(i,datacube_root,'20240611090406') #self.key)
             if 'S2_SR' in i:
-                self.__make_s2_datacube_geotiffs(i,datacube_root,self.key)
+                self.__make_s2_datacube_geotiffs(i,datacube_root,'20240611090406')#self.key)
             if 'ACM' in i:
-                self.__make_cloudmask_datacube_geotiffs(i,datacube_root,self.key)
+                self.__make_cloudmask_datacube_geotiffs(i,datacube_root,'20240611090406') #self.key)
         
     def download_raw_s2(self, staging_area, get_acm = True, manual_key = None):
         
@@ -230,7 +241,7 @@ class SentinelDownloader():
         return new_s1_files
         
     def download_raw_all(self, staging_area, manual_key = None): # staging_area set by user 
-        
+       
         # find the bounding box and download key
         bb = self.__prep_download_bounding_box()
         if manual_key is None:
@@ -330,6 +341,8 @@ class SentinelDownloader():
             # Get GEE collection  # TODO apply filter edge polarization
             ee_collection = (ee.ImageCollection(product).
                              filterBounds(geometry).
+                             filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')).
+                             filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')).
                              filterDate(start_date, end_date).
                              select(bands))
 
@@ -344,7 +357,7 @@ class SentinelDownloader():
             for resolution, band in zip(resolutions, bands):                
                 unique_desc = f'{key}_{band}'
                 tasks.append(ee.batch.Export.image.toCloudStorage(
-                    image=ee_collection.select(band).toBands(),
+                    image=ee_collection.select(band).toBands().toFloat(),
                     region=geometry,
                     description=unique_desc,
                     bucket=bucket,
@@ -355,7 +368,7 @@ class SentinelDownloader():
                 
             if len(tasks) == 0:
                 continue
-            
+            print(tasks) 
             # start the tasks
             for task in tasks:
                 task.start()
@@ -366,6 +379,8 @@ class SentinelDownloader():
             while len([i.status()['state'] for i in tasks if i.status()['state'] == 'COMPLETED']) < len(bands):
                 
                 if self.verbose == True:
+                    # Project must be setup in advance e.g
+                    # earthengine set_project worldpeatland
                     result = subprocess.run(['earthengine', 'task', 'list'], stdout=subprocess.PIPE)
                     output = str(result.stdout).replace('  Export.image  ','').split('\\n')[:3]
                     trimmed = [[i for i in j.split(' ') if len(i) > 0] for j in output]

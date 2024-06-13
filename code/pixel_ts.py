@@ -9,8 +9,8 @@ from glob import glob
 from datetime import datetime
 
 import sys
-sys.path.append('/home/ysarrouh/TATSSI/')
-sys.path.insert(0,'/home/ysarrouh/WorldPeatlands/')
+sys.path.append('/workspace/TATSSI/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from downloader_wp_test import *
 from gdal_sheep import *
 from save_xarray_to_gtiff_old import *
@@ -89,11 +89,16 @@ def pixel_ts(path, _data_var, scaling_factor, period, site_name, detrend):
     return
 
 
-def main(directory, site_name, value):
+def main(site_directory, value):
 
     # get the specific config path for this site 
     # to get the dates and the products
-    config_dir = directory + site_name + f'/{site_name}_config.yml'
+    
+    # get the site name from site_directory
+    path_components = site_directory.split(os.sep)
+    site_name = path_components[-1]
+
+    config_dir = site_directory + f'/{site_name}_config.yml'
     start_date, end_date, products = read_config(config_dir)
     
     
@@ -110,7 +115,7 @@ def main(directory, site_name, value):
 
             scaling_factor, s, smoothing_method, period = j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period']
 
-            pattern = directory + f'{site_name}/MODIS/{product}/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
+            pattern = site_directory + f'/MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
             path = glob.glob(pattern)[0] 
             
             LOG.info(f'Processing this file {path}')
@@ -120,12 +125,11 @@ def main(directory, site_name, value):
     
 if __name__ == "__main__":
 
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 3:
 
-        print("Usage: python script.py <directory> <site_name>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory> <True/False>") # the user has to input two arguments  
     else:
-        directory = sys.argv[1]
-        site_name = sys.argv[2] 
+        site_directory = sys.argv[1]
         value = sys.argv[3].lower()
         
         if value == 'true':
@@ -136,8 +140,7 @@ if __name__ == "__main__":
             print("Invalid value! Please enter 'True' or 'False'.")
             sys.exit(1)
         
-        main(directory, site_name, value)
+        main(site_directory, value)
 
 # example of user input arguments
-# python pixel_ts.py /data/world_peatlands/demo/dry_run/ Norfolk True (True or False) 
-    
+# python pixel_ts.py /data/sites/Norfolk True   

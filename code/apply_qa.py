@@ -10,8 +10,8 @@ from urllib.request import urlretrieve
 import os
 import json
 import sys
-sys.path.append('/home/ysarrouh/TATSSI/')
-sys.path.insert(0,'/home/ysarrouh/WorldPeatlands/')
+sys.path.append('/workspace/TATSSI/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from downloader_wp_test import *
 import collections
 
@@ -25,13 +25,18 @@ from TATSSI.notebooks.helpers.time_series_interpolation import \
 ''' apply_qa its the 3rd code to run will apply the qa settings to the MODIS data time series generated in code 2 then it will INTERPOLATE the cleaned time series'''
 
 
-def main(directory, site_name):
-    
-    qa_path = "/home/ysarrouh/WorldPeatlands/QA_settings/"
+def main(site_directory):
+     
+    qa_path = "/workspace/WorldPeatland/QA_settings/"
     
     # get the specific config path for this site 
     # to get the dates and the products
-    config_dir = directory + site_name + f'/{site_name}_config.yml'
+    
+    # get the site name from site_directory
+    path_components = site_directory.split(os.sep)
+    site_name = path_components[-1]
+
+    config_dir = site_directory + f'/{site_name}_config.yml'
     start_date, end_date, products = read_config(config_dir)
 
     # change date format 
@@ -55,95 +60,99 @@ def main(directory, site_name):
         for _data_var, qa_def in zip(_data_var_list, qa_def_list):
 
             # source_dir where the modis data for this product is stored
-            source_dir = directory + site_name + '/MODIS/'+ f'{product}.{version}'
-            
-            # check if file exists in this directory 
-            if not os.path.exists(source_dir):
-                LOG.error(f'A MODIS file does not exist: {source_dir}')
+            source_dirs = glob.glob(site_directory + '/MODIS/'+ f'{product}.{version}/*/')
 
-            # json file for qa_settings
-            qa_json = f'{qa_path}{product}.{version}_{qa_def}.json'
+            for source_dir in source_dirs:
+
+                # check if file exists in this directory
+                if not os.path.exists(source_dir):
+                    LOG.error(f'A MODIS file does not exist: {source_dir}')
                 
-            # check if a qa_file exists in this directory 
-            if not os.path.exists(qa_json):
-                LOG.error(f'A MODIS file does not exist: {qa_json}')
-            
-            # Create the QA analytics object
-            qa_analytics = Analytics(
-                source_dir=source_dir,
-                product=product,
-                chunked=True,
-                version=version,
-                start=start_date,
-                end=end_date,
-                data_format='tif')
+                # json file for qa_settings
+                qa_json = f'{qa_path}{product}.{version}_{qa_def}.json'
 
-            # Get QA definition
-            for i,_def in enumerate(qa_analytics.qa_defs):
-                layer = _def['QualityLayer'].unique()[0]
+                # check if a qa_file exists in this directory
+                if not os.path.exists(qa_json):
+                    LOG.error(f'A MODIS file does not exist: {qa_json}')
+
+                # Create the QA analytics object
+                qa_analytics = Analytics(
+                        source_dir=source_dir,
+                        product=product,
+                        chunked=True,
+                        version=version,
+                        start=start_date,
+                        end=end_date,
+                        data_format='tif'
+                    )
+
+                # Get QA definition
+                for i,_def in enumerate(qa_analytics.qa_defs):
+                    layer = _def['QualityLayer'].unique()[0]
                 if layer == qa_def:
                     index = i 
 
-            qa_analytics.qa_def = qa_analytics.qa_defs[index]
+                qa_analytics.qa_def = qa_analytics.qa_defs[index]
 
-            # Set the QA user selection from saved settings
-            with open(qa_json, 'r') as f:
-                tmp_user_qa_selection = collections.OrderedDict(json.loads(f.read()))
+                # Set the QA user selection from saved settings
+                with open(qa_json, 'r') as f:
+                    tmp_user_qa_selection = collections.OrderedDict(json.loads(f.read()))
 
-            qa_analytics.user_qa_selection = tmp_user_qa_selection
+                qa_analytics.user_qa_selection = tmp_user_qa_selection
 
-            # Apply QA analytics - no progress bar
-            qa_analytics._analytics(b=None)
+                # Apply QA analytics - no progress bar
+                qa_analytics._analytics(b=None)
 
-            # Save mask and analytics
-            # Copy metadata
-            qa_analytics.pct_data_available.attrs = \
-               qa_analytics.ts.data[_data_var].attrs
-            qa_analytics.max_gap_length.attrs = \
-               qa_analytics.ts.data[_data_var].attrs
+                # Save mask and analytics
+                # Copy metadata
+                
+                qa_analytics.pct_data_available.attrs = \
+                        qa_analytics.ts.data[_data_var].attrs
+                
+                qa_analytics.max_gap_length.attrs = \
+                        qa_analytics.ts.data[_data_var].attrs
             
-            # create the directory to store QA analytics
-            path_analytics = create_dir(directory + site_name + '/MODIS/', 'analytics')
+                # create the directory to store QA analytics
+                path_analytics = create_dir(site_directory + '/MODIS/', 'analytics')
 
-            # Add one dimension and save to disk percentage of data avail.
-            tmp_data_array = qa_analytics.pct_data_available.expand_dims(
-                dim='time', axis=0)
-            save_dask_array(fname=f'{path_analytics}/{_data_var}_pct_data_available.tif',
-                data=tmp_data_array,
-                data_var=None, method=None)
+                # Add one dimension and save to disk percentage of data avail.
+                tmp_data_array = qa_analytics.pct_data_available.expand_dims(
+                        dim='time', axis=0)
+                save_dask_array(fname=f'{path_analytics}/{_data_var}_pct_data_available.tif',
+                        data=tmp_data_array,
+                        data_var=None, method=None)
 
-            # Add one dimension and save to disk max gap-length
-            tmp_data_array = qa_analytics.max_gap_length.expand_dims(
-                dim='time', axis=0)
-            save_dask_array(fname=f'{path_analytics}/{_data_var}_max_gap_length.tif',
-                data=tmp_data_array,
-                data_var=None, method=None)
+                # Add one dimension and save to disk max gap-length
+                tmp_data_array = qa_analytics.max_gap_length.expand_dims(
+                        dim='time', axis=0)
+                save_dask_array(fname=f'{path_analytics}/{_data_var}_max_gap_length.tif',
+                        data=tmp_data_array,
+                        data_var=None, method=None)
 
-            # Save mask
-            save_dask_array(fname=f'{path_analytics}/{_data_var}_qa_analytics_mask.tif',
-                data=qa_analytics.mask,
-                data_var=None, method=None)
+                # Save mask
+                save_dask_array(fname=f'{path_analytics}/{_data_var}_qa_analytics_mask.tif',
+                        data=qa_analytics.mask,
+                        data_var=None, method=None)
             
-            LOG.info(f'interpolation has started')
+                LOG.info(f'interpolation has started')
             
-            # Interpolate
-            qa_analytics.selected_data_var = _data_var
-            qa_analytics.selected_interpolation_method = 'linear'
+                # Interpolate
+                qa_analytics.selected_data_var = _data_var
+                qa_analytics.selected_interpolation_method = 'linear'
 
-            tsi = TimeSeriesInterpolation(qa_analytics, isNotebook=False)
-            tsi.interpolate(progressBar=None)
+                tsi = TimeSeriesInterpolation(qa_analytics, isNotebook=False)
+                tsi.interpolate(progressBar=None)
 
-            LOG.info(f'Data {_data_var} has been interpolated')
+                LOG.info(f'Data {_data_var} has been interpolated')
     
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
 
-        print("Usage: python script.py <directory> <site_name>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory>") # the user has to input one argument
     else:
-        directory = sys.argv[1]
-        site_name = sys.argv[2] 
-        main(directory, site_name)
+        site_directory = sys.argv[1]
+        main(site_directory)
         
 # # example of user input arguments
-# python apply_qa.py /data/world_peatlands/demo/dry_run/ Norfolk
+# python apply_qa.py /data/sites/Norfolk

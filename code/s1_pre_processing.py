@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime as dt
 
 import sys
-sys.path.insert(0,'/home/ysarrouh/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from save_xarray_to_gtiff_old import *
 
 from gdal_sheep import *
@@ -58,7 +58,7 @@ def get_file_name(file_path):
     file_name = file_path_components[-1].rsplit('.', 1)
     return file_name[0], file_name[1]
 
-def create_xr(orbit, output_dir, tile_name):
+def create_xr(orbit, output_dir, site_name):
     
     '''
     create_xr function takes as input asc or desc and returns an xr with 3 data variables VV, VH and angles
@@ -77,7 +77,7 @@ def create_xr(orbit, output_dir, tile_name):
     
     # call the get_list_of_files function to get the nested list each key is a band name
     # and the values are the corresponding file paths for the different days the image was captured for this band 
-    nested = [sorted(glob.glob(f'{output_dir}/{tile_name}/Sentinel/datacube/S1_GRD/%s/{tile_name}/*.tif'%i)) for i in bd]
+    nested = [sorted(glob.glob(f'{site_directory}/Sentinel/datacube/S1_GRD/%s/{tile_name}/*.tif'%i)) for i in bd]
     # create a dict to keep track of the name of the band for each list of file paths
     fdict = dict(zip(bd, nested))
     
@@ -120,7 +120,7 @@ def calc_cr(ds, orbit):
     # Calculate Cross Ratio 
     ds = ds.assign(cr = ds[f"VH_{orbit}"] - ds[f'VV_{orbit}'])
     # Save as netcdf
-    ds.to_netcdf(f'/home/ysarrouh/cross_ratio_{orbit}.nc')
+    ds.to_netcdf(f'{site_directory}/Sentinel/cross_ratio_{orbit}.nc')
     
     return ds
 
@@ -148,15 +148,18 @@ def transform_save(ds, orbit, saved_path):
     
     return output_sinu
 
-def main(geojson_path, output_dir):
+def main(site_directory, output_dir):
     
-    tile_name,_ = get_file_name(geojson_path)
-    
+    # get the site name from site_directory
+    path_components = site_directory.split(os.sep)
+    site_name = path_components[-1]
+
+
     orbits = ['ASCENDING', 'DESCENDING']
     
     for orbit in orbits:
 
-        ds = create_xr(orbit, output_dir , tile_name)
+        ds = create_xr(orbit, output_dir , site_name)
 
         _ds = apply_threshold(ds)
 
@@ -167,7 +170,7 @@ def main(geojson_path, output_dir):
         # set the current projection taken from linux gdalinfo -proj4 from a random sentinel-1 tif 
         ds_cr.attrs['crs'] = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs '
 
-        saved_path = create_dir(f'{output_dir}{tile_name}/Sentinel/', 'CrossRatio')
+        saved_path = create_dir(f'{site_directory}/Sentinel/', 'CrossRatio')
         
         output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
         save_xarray_old(output_utm, ds, 'cr')
@@ -196,11 +199,11 @@ def main(geojson_path, output_dir):
 if __name__ == "__main__":
     
     if len(sys.argv) != 3:
-        print("Usage: python script.py <geojson_path> <output_dir>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory> <output_dir>") # the user has to input two arguments  
     else:
-        geojson_path = sys.argv[1] # location of the second item in the list which is the first argument geojson site location 
-        output_dir = sys.argv[2] # location of output downloaded data 3rd item in the list which is the 2nd argument
-        main(geojson_path, output_dir)
+        site_directory = sys.argv[1] 
+        output_dir = sys.argv[2] 
+        main(site_directory, output_dir)
         
         
         

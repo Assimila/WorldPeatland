@@ -405,7 +405,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                 # run sentinel downloaders per month  
                 sd = SentinelDownloader(geojson_path, j, j_end, project=project)
                 LOG.info(f'Sentinel data request from {j} to {j_end}')
-                new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
+#                new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
                 LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
                               
@@ -418,8 +418,9 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
         LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
 
         # 2. download all raw data in the rawdata folder 
-        new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
+#        new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
 
+        new_dwn_files = glob.glob(f'/data/sites/Degero/Sentinel/*/*/*.tif')
         # 3. write the files into the datacube structure as tiffs
         sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
@@ -543,13 +544,13 @@ def main(geojson_path, output_dir):
     # create a data/MODIS directory to store all products not in a site specific file
     #  path_modis = create_dir(output_dir, 'data/MODIS')
     path_modis = '/data/MODIS'
-    LOG.info(f'Starting to download MODIS data for {site_area}')
-    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+#    LOG.info(f'Starting to download MODIS data for {site_area}')
+#    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+#    LOG.info(f'MODIS data download completed for {site_area}')  
 
-    LOG.info(f'MODIS data download completed for {site_area}')  
     get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
     
-    get_viirs_archive(start_date, country, site_area, site_directory)
+#    get_viirs_archive(start_date, country, site_area, site_directory)
 
 
 if __name__ == "__main__":

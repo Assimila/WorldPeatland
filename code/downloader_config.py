@@ -543,13 +543,12 @@ def main(geojson_path, output_dir):
     # create a data/MODIS directory to store all products not in a site specific file
     #  path_modis = create_dir(output_dir, 'data/MODIS')
     path_modis = '/data/MODIS'
-    LOG.info(f'Starting to download MODIS data for {site_area}')
-    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+#    LOG.info(f'Starting to download MODIS data for {site_area}')
+#    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+#    LOG.info(f'MODIS data download completed for {site_area}')  
 
-    LOG.info(f'MODIS data download completed for {site_area}')  
-    get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
-    
-    get_viirs_archive(start_date, country, site_area, site_directory)
+    #get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
+#    get_viirs_archive(start_date, country, site_area, site_directory)
 
 
 if __name__ == "__main__":

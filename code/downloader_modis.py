@@ -547,9 +547,9 @@ def main(geojson_path, output_dir):
     get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')  
-    get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
+#    get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
     
-    get_viirs_archive(start_date, country, site_area, site_directory)
+#    get_viirs_archive(start_date, country, site_area, site_directory)
 
 
 if __name__ == "__main__":

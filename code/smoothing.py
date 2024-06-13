@@ -9,8 +9,8 @@ from glob import glob
 from datetime import datetime
 
 import sys
-sys.path.append('/home/ysarrouh/TATSSI/')
-sys.path.insert(0,'/home/ysarrouh/WorldPeatlands/')
+sys.path.append('/workspace/TATSSI/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from downloader_wp_test import *
 
 from TATSSI.time_series.smoothing import Smoothing
@@ -34,13 +34,18 @@ ch.setFormatter(formatter)
 # add ch to logger
 LOG.addHandler(ch)
 
-def main(directory, site_name):
+def main(site_directory):
 
     # get the specific config path for this site 
     # to get the dates and the products
-    config_dir = directory + site_name + f'/{site_name}_config.yml'
+    
+    # get the site name from site_directory
+    path_components = site_directory.split(os.sep)
+    site_name = path_components[-1]
+
+
+    config_dir = site_directory + f'/{site_name}_config.yml'
     start_date, end_date, products = read_config(config_dir)
-    products
 
     for i , j  in enumerate(products):
 
@@ -51,7 +56,7 @@ def main(directory, site_name):
         
         smoothing_method, s = j['smooth_method'], j['smooth_factor']
 
-        pattern = directory + f'{site_name}/MODIS/{product}/*/interpolated/*linear.tif'
+        pattern = site_directory + f'/MODIS/{product}/*/*/interpolated/*linear.tif'
         f_list = glob.glob(pattern)
 
         for fname in f_list:
@@ -74,13 +79,12 @@ def main(directory, site_name):
             
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
 
-        print("Usage: python script.py <directory> <site_name>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory>") # the user has to input one argument
     else:
-        directory = sys.argv[1]
-        site_name = sys.argv[2] 
-        main(directory, site_name)
+        site_directory = sys.argv[1]
+        main(site_directory)
         
 # # example of user input arguments
-# python apply_qa.py /data/world_peatlands/demo/dry_run/ Norfolk
+# python smoothing.py /data/sites/Norfolk

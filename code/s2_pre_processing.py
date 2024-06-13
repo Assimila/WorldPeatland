@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime as dt
 
 import sys
-sys.path.insert(0,'/home/ysarrouh/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from save_xarray_to_gtiff_old import *
 
 from gdal_sheep import *

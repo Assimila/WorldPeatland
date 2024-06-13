@@ -1,0 +1,39 @@
+[I 11:17:11.389 NotebookApp] Writing notebook server cookie secret to /home/eouser/.local/share/jupyter/runtime/notebook_cookie_secret
+[I 11:17:11.402 NotebookApp] [beakerx] enabled
+Traceback (most recent call last):
+  File "/python/anaconda3/envs/worldpeatland/bin/jupyter-notebook", line 10, in <module>
+    sys.exit(main())
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/jupyter_core/application.py", line 269, in launch_instance
+    return super().launch_instance(argv=argv, **kwargs)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/traitlets/config/application.py", line 978, in launch_instance
+    app.start()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 2319, in start
+    success = self._bind_http_server()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 1794, in _bind_http_server
+    return self._bind_http_server_unix() if self.sock else self._bind_http_server_tcp()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 1820, in _bind_http_server_tcp
+    self.http_server.listen(port, self.ip)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/tornado/tcpserver.py", line 183, in listen
+    sockets = bind_sockets(
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/tornado/netutil.py", line 162, in bind_sockets
+    sock.bind(sockaddr)
+OSError: [Errno 99] Cannot assign requested address
+[I 11:17:23.295 NotebookApp] [beakerx] enabled
+Traceback (most recent call last):
+  File "/python/anaconda3/envs/worldpeatland/bin/jupyter-notebook", line 10, in <module>
+    sys.exit(main())
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/jupyter_core/application.py", line 269, in launch_instance
+    return super().launch_instance(argv=argv, **kwargs)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/traitlets/config/application.py", line 978, in launch_instance
+    app.start()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 2319, in start
+    success = self._bind_http_server()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 1794, in _bind_http_server
+    return self._bind_http_server_unix() if self.sock else self._bind_http_server_tcp()
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/notebook/notebookapp.py", line 1820, in _bind_http_server_tcp
+    self.http_server.listen(port, self.ip)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/tornado/tcpserver.py", line 183, in listen
+    sockets = bind_sockets(
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/tornado/netutil.py", line 162, in bind_sockets
+    sock.bind(sockaddr)
+OSError: [Errno 99] Cannot assign requested address

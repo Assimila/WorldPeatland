@@ -257,7 +257,9 @@ class ShapefileToolbox():
     def __find_epsg_code(self, wgs_cent):
         
         # open the shapefile with all the different UTM zones contained
-        utm_shp = ogr.Open('/workspace/Acropalis/scratch/utmzone-polygon.shp')
+        path = '../utmzone-polygon/utmzone-polygon.shp'
+        utm_shp = ogr.Open(path)
+       
         utm_lyr = utm_shp.GetLayer()
         
         utm_zone = -9999

@@ -11,9 +11,9 @@ import os
 import json
 
 import sys
-sys.path.append('/home/ysarrouh/TATSSI/')
+sys.path.append('/workspace/TATSSI/')
 
-sys.path.insert(0,'/home/ysarrouh/WorldPeatlands/')
+sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from downloader_wp_test import *
 
 from TATSSI.time_series.generator import Generator  
@@ -21,26 +21,26 @@ from TATSSI.time_series.generator import Generator
 
 '''ts_generator_wp 2nd script to run, it will generate time series for the MODIS data'''    
 
+# need to update TATSSI/TATSSI/qa/EOS catalogue from APPEARS to contain all the updated products and version 
+# we can do that by removing the current pkl files in EOS and running TATSSI UI in the download data tab 
+# this will initiate by itself getting all the available pkl files in APPEARS
+
     
 # TODO check for existing MODIS time series files 
 # it seems to work only in the UI and not in the scripts
     
-def get_ts(directory, site_name):
+def get_ts(site_directory):
     
     '''
-    INPUT directory from user, path to the folder where downloader_wp was run to download all 
+    INPUT site_directory from user, path to the folder where downloader_wp was run to download all 
     products 
     '''
-    modis_dir = directory + site_name + '/MODIS/'
-    
-    if not os.path.exists(directory):
-        LOG.error(f'This director does not exist: {directory}')
-        return
-    
-    # check if a directory with this site_name exists
-    if not os.path.exists(directory + site_name):
-        LOG.error(f'A file with this site name {site_name} in this directory {directory}'/ 
-                  ' does not exist')
+    modis_dir = site_directory + 'MODIS/'
+    print('modis directory', modis_dir) 
+
+
+    if not os.path.exists(site_directory):
+        LOG.error(f'This director does not exist: {site_directory}')
         return
     
     # check if a MODIS file exists in this directory 
@@ -56,46 +56,69 @@ def get_ts(directory, site_name):
         print(f"This directory {modis_dir} is empty") 
         return 
 
-    for i, n in enumerate(dir):
+    for i, n in enumerate(dir_):
+
+
+        LOG.info(n)
+
 
         product_name, version = dir_[i].rsplit('.', 1) 
         
-        output_dir = modis_dir + n
+        # since we want to do the processing per tile 
+        # glob will get all the tile files for the product we are looping in 
+        output_dirs = glob.glob(modis_dir + n +f'/*/')
         
-        # Create for MCD64A1 because the files are in hdf format just 
-        # for the processing to be able to use the data do not apply mask 
-        # later on MCD64A1 with the apply_qa.py
-        
-        if os.path.getsize(output_dir) == 0:
-            LOG.error(f'{output_dir} this file is empty')
-            continue
+        for output_dir in output_dirs:
 
-        # TATSSI Time Series Generator object
-        tsg = Generator(source_dir=output_dir, product=product_name,
-                    version=version, data_format='hdf',
-                    progressBar=None, preprocessed=True)
 
-        tsg.generate_time_series()
+            # Create for MCD64A1 because the files are in hdf format just 
+            # for the processing to be able to use the data do not apply mask 
+            # later on MCD64A1 with the apply_qa.py
+        
+            if os.path.getsize(output_dir) == 0:
+                LOG.error(f'{output_dir} this file is empty')
+                continue
 
-        LOG.info(f'time series generated for this product {n}')       
+            # TATSSI Time Series Generator object
+            tsg = Generator(source_dir=output_dir,
+                     product=product_name,
+                     version=version,
+                     data_format='hdf',
+                     progressBar=None,
+                     preprocessed=True)
+            
+            LOG.info('++++++++++++++++++++++++++++++++++++++++++')
+            LOG.info(output_dir)
+            LOG.info(product_name)
+            LOG.info(version)
+
+
+
+
+            tsg.generate_time_series()
+
+            LOG.info(f'time series generated for this product {n}')       
         
         
-def main(directory, site_name):
-    
-    get_ts(directory, site_name)
+def main(site_directory):
+    '''
+    INPUT
+        site_directory - str - path to a specific site where all data were previously downloaded'''
+    get_ts(site_directory)
     
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
 
-        print("Usage: python script.py <directory> <site_name>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory>") # the user has to input one argument
     else:
-        directory = sys.argv[1]
-        site_name = sys.argv[2] 
-        main(directory, site_name)
+        site_directory = sys.argv[1]
+        main(site_directory)
 
 
+# example how to run this script in command line
 
+# python ts_generator_wp.py /data/sites/Norfolk
 
 
 

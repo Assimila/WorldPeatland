@@ -1,0 +1,77 @@
+INFO:rpy2.situation:cffi mode is CFFI_MODE.ANY
+INFO:rpy2.situation:R home found: /python/anaconda3/envs/worldpeatland/lib/R
+INFO:rpy2.situation:R library path: 
+INFO:rpy2.situation:LD_LIBRARY_PATH: 
+INFO:rpy2.rinterface_lib.embedded:Default options to initialize R: rpy2, --quiet, --no-save
+INFO:rpy2.rinterface_lib.embedded:R is already initialized. No need to initialize.
+INFO:__main__:Norfolk is now processing
+INFO:__main__:Directory '/workspace/WorldPeatland/TestSites/Norfolk' already exists.
+INFO:__main__:Config file has been created and saved here /workspace/WorldPeatland/TestSites/Norfolk/Norfolk_config.yml
+INFO:__main__:Directory '/workspace/WorldPeatland/TestSites/data/MODIS' already exists.
+INFO:__main__:Starting to download MODIS data for Norfolk
+INFO:__main__:MODIS data download completed for Norfolk
+h18v03
+Python 3.10.6 | packaged by conda-forge | (main, Aug 22 2022, 20:35:26) [GCC 10.4.0]
+Type 'copyright', 'credits' or 'license' for more information
+IPython 8.5.0 -- An enhanced Interactive Python. Type '?' for help.
+
+In [1]: ---------------------------------------------------------------------------
+OSError                                   Traceback (most recent call last)
+File /workspace/WorldPeatland/code/downloader_wp_test.py:562
+    560 geojson_path = sys.argv[1] # location of the second item in the list which is the first argument geojson site location 
+    561 output_dir = sys.argv[2] # location of output downloaded data 3rd item in the list which is the 2nd argument
+--> 562 main(geojson_path, output_dir)
+
+File /workspace/WorldPeatland/code/downloader_wp_test.py:549, in main(geojson_path, output_dir)
+    546 #get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+    548 LOG.info(f'MODIS data download completed for {site_area}')  
+--> 549 from IPython import embed; embed()
+    550 get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path)
+    552 get_viirs_archive(start_date, country, site_area, site_directory)
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/terminal/embed.py:399, in embed(header, compile_flags, **kwargs)
+    396 frame = sys._getframe(1)
+    397 shell = InteractiveShellEmbed.instance(_init_location_id='%s:%s' % (
+    398     frame.f_code.co_filename, frame.f_lineno), **kwargs)
+--> 399 shell(header=header, stack_depth=2, compile_flags=compile_flags,
+    400     _call_location_id='%s:%s' % (frame.f_code.co_filename, frame.f_lineno))
+    401 InteractiveShellEmbed.clear_instance()
+    402 #restore previous instance
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/terminal/embed.py:245, in InteractiveShellEmbed.__call__(self, header, local_ns, module, dummy, stack_depth, compile_flags, **kw)
+    241     self.show_banner()
+    243 # Call the embedding code with a stack depth of 1 so it can skip over
+    244 # our call and get the original caller's namespaces.
+--> 245 self.mainloop(
+    246     local_ns, module, stack_depth=stack_depth, compile_flags=compile_flags
+    247 )
+    249 self.banner2 = self.old_banner2
+    251 if self.exit_msg is not None:
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/terminal/embed.py:337, in InteractiveShellEmbed.mainloop(self, local_ns, module, stack_depth, compile_flags)
+    334 self.set_completer_frame()
+    336 with self.builtin_trap, self.display_trap:
+--> 337     self.interact()
+    339 # now, purge out the local namespace of IPython's hidden variables.
+    340 if local_ns is not None:
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/terminal/interactiveshell.py:670, in TerminalInteractiveShell.interact(self)
+    667 print(self.separate_in, end='')
+    669 try:
+--> 670     code = self.prompt_for_code()
+    671 except EOFError:
+    672     if (not self.confirm_exit) \
+    673             or self.ask_yes_no('Do you really want to exit ([y]/n)?','y','n'):
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/terminal/interactiveshell.py:429, in TerminalInteractiveShell.init_prompt_toolkit_cli.<locals>.prompt()
+    427 def prompt():
+    428     prompt_text = "".join(x[1] for x in self.prompts.in_prompt_tokens())
+--> 429     lines = [input(prompt_text)]
+    430     prompt_continuation = "".join(x[1] for x in self.prompts.continuation_prompt_tokens())
+    431     while self.check_complete('\n'.join(lines))[0] == 'incomplete':
+
+File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/utils/py3compat.py:48, in input(prompt)
+     47 def input(prompt=""):
+---> 48     return builtin_mod.input(prompt)
+
+OSError: [Errno 9] Bad file descriptor

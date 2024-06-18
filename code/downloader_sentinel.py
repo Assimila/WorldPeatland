@@ -405,8 +405,15 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                 # run sentinel downloaders per month  
                 sd = SentinelDownloader(geojson_path, j, j_end, project=project)
                 LOG.info(f'Sentinel data request from {j} to {j_end}')
-                new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
+                
+                # only download s1
+                new_dwn_files = sd.download_raw_s1(path_sentinel +'/rawdata/', manual_key = site_area)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+
+                # only download s2 & ACM
+                new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)
+                sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+                
                 LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
                               
     else: 
@@ -417,9 +424,19 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                                 end_date.date(), project=project)
         LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
 
-        # 2. download all raw data in the rawdata folder 
-        new_dwn_files = sd.download_raw_all(path_sentinel +'/rawdata/', manual_key = site_area)
+        # only download s1
+        new_dwn_files = sd.download_raw_s1(path_sentinel +'/rawdata/', manual_key = site_area)
+        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
+        # 1. Call SentinelDownloader class
+        start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
+        sd = SentinelDownloader(geojson_path, start_date.date(),
+                                end_date.date(), project=project)
+
+        # only download s2 & ACM
+        new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)
+        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/') 
+         
         # 3. write the files into the datacube structure as tiffs
         sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 

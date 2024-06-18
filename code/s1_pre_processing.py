@@ -168,6 +168,9 @@ def main(site_directory, output_dir):
         ds_cr = calc_cr(_ds, orbit)
 
         # set the current projection taken from linux gdalinfo -proj4 from a random sentinel-1 tif 
+        # TODO automatic getting the projection for each zone 
+        # think about if 2 zones for one site 
+        # then will have to get the zone that is covering the largest area
         ds_cr.attrs['crs'] = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs '
 
         saved_path = create_dir(f'{site_directory}/Sentinel/', 'CrossRatio')

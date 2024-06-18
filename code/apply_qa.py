@@ -33,11 +33,10 @@ def main(site_directory):
     # to get the dates and the products
     
     # get the site name from site_directory
-    path_components = site_directory.split(os.sep)
-    site_name = path_components[-1]
-
-    config_dir = site_directory + f'/{site_name}_config.yml'
-    start_date, end_date, products = read_config(config_dir)
+    config = glob.glob(site_directory + f'*_config.yml') 
+    config_fname =  config[0]
+    
+    start_date, end_date, products = read_config(config_fname)
 
     # change date format 
     start_date = datetime.strptime(start_date, '%Y-%m-%d').strftime('%d-%m-%Y')
@@ -60,7 +59,7 @@ def main(site_directory):
         for _data_var, qa_def in zip(_data_var_list, qa_def_list):
 
             # source_dir where the modis data for this product is stored
-            source_dirs = glob.glob(site_directory + '/MODIS/'+ f'{product}.{version}/*/')
+            source_dirs = glob.glob(site_directory + 'MODIS/'+ f'{product}.{version}/*/')
 
             for source_dir in source_dirs:
 
@@ -89,13 +88,14 @@ def main(site_directory):
                 # Get QA definition
                 for i,_def in enumerate(qa_analytics.qa_defs):
                     layer = _def['QualityLayer'].unique()[0]
-                if layer == qa_def:
-                    index = i 
+                    if layer == qa_def:
+                        index = i 
 
                 qa_analytics.qa_def = qa_analytics.qa_defs[index]
 
                 # Set the QA user selection from saved settings
                 with open(qa_json, 'r') as f:
+                    
                     tmp_user_qa_selection = collections.OrderedDict(json.loads(f.read()))
 
                 qa_analytics.user_qa_selection = tmp_user_qa_selection
@@ -105,7 +105,6 @@ def main(site_directory):
 
                 # Save mask and analytics
                 # Copy metadata
-                
                 qa_analytics.pct_data_available.attrs = \
                         qa_analytics.ts.data[_data_var].attrs
                 
@@ -113,14 +112,16 @@ def main(site_directory):
                         qa_analytics.ts.data[_data_var].attrs
             
                 # create the directory to store QA analytics
-                path_analytics = create_dir(site_directory + '/MODIS/', 'analytics')
+                path_analytics = create_dir(site_directory + 'MODIS/', 'analytics')
+
+                print('path_analytics:',path_analytics, 'for variable:',_data_var)
 
                 # Add one dimension and save to disk percentage of data avail.
                 tmp_data_array = qa_analytics.pct_data_available.expand_dims(
                         dim='time', axis=0)
                 save_dask_array(fname=f'{path_analytics}/{_data_var}_pct_data_available.tif',
-                        data=tmp_data_array,
-                        data_var=None, method=None)
+                       data=tmp_data_array,
+                      data_var=None, method=None)
 
                 # Add one dimension and save to disk max gap-length
                 tmp_data_array = qa_analytics.max_gap_length.expand_dims(
@@ -128,7 +129,6 @@ def main(site_directory):
                 save_dask_array(fname=f'{path_analytics}/{_data_var}_max_gap_length.tif',
                         data=tmp_data_array,
                         data_var=None, method=None)
-
                 # Save mask
                 save_dask_array(fname=f'{path_analytics}/{_data_var}_qa_analytics_mask.tif',
                         data=qa_analytics.mask,
@@ -155,4 +155,4 @@ if __name__ == "__main__":
         main(site_directory)
         
 # # example of user input arguments
-# python apply_qa.py /data/sites/Norfolk
+# python apply_qa.py /data/sites/Norfolk/

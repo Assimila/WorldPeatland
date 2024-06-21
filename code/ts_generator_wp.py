@@ -2,7 +2,7 @@ import yaml
 from datetime import datetime, timedelta
 import calendar
 from tqdm import *
-from osgeo import ogr
+from osgeo import ogr, osr
 import shutil
 import glob
 import logging
@@ -29,7 +29,7 @@ from TATSSI.time_series.generator import Generator
 # TODO check for existing MODIS time series files 
 # it seems to work only in the UI and not in the scripts
     
-def get_ts(site_directory):
+def get_ts(site_directory, json_path):
     
     '''
     INPUT site_directory from user, path to the folder where downloader_wp was run to download all 
@@ -55,6 +55,51 @@ def get_ts(site_directory):
     if len(dir_) == 0: 
         print(f"This directory {modis_dir} is empty") 
         return 
+    
+    # Open the GeoJSON file
+    driver = ogr.GetDriverByName("GeoJSON")
+    src_GeoJSON = driver.Open(json_path)
+    
+    # Get the layer from the GeoJSON file
+    site_layer = src_GeoJSON.GetLayer()
+    
+    # Extract the bounding box coordinates
+    min_x, max_x, min_y, max_y = site_layer.GetExtent() 
+
+    source_srs = osr.SpatialReference()
+    source_srs.ImportFromProj4('+proj=longlat +datum=WGS84 +no_defs +type=crs')  # WGS84
+
+    target_srs = osr.SpatialReference()
+    target_srs.ImportFromProj4('+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs')
+
+    # Create a coordinate transformation
+    transform = osr.CoordinateTransformation(source_srs, target_srs)
+
+    # Create points for each corner of the bounding box
+    bottom_left = ogr.Geometry(ogr.wkbPoint)
+    bottom_left.AddPoint(min_x, min_y)
+
+    top_right = ogr.Geometry(ogr.wkbPoint)
+    top_right.AddPoint(max_x, max_y)
+
+    # Transform the points
+    bottom_left.Transform(transform)
+    top_right.Transform(transform)    
+    
+    # Extract the transformed coordinates
+    minX = bottom_left.GetX()
+    maxX = top_right.GetX()
+    minY = bottom_left.GetY()
+    maxY = top_right.GetY()   
+    
+#     config = glob.glob(site_directory + f'*_config.yml') 
+#     config_fname =  config[0]
+
+#     with open(config_fname) as f:
+#         data = yaml.full_load(f)
+    
+#     # Information from the first list index 0 about the site
+#     bbox = data[0]['bbox']
 
     for i, n in enumerate(dir_):
 
@@ -69,6 +114,8 @@ def get_ts(site_directory):
         output_dirs = glob.glob(modis_dir + n +f'/*/')
         
         for output_dir in output_dirs:
+            
+            print(output_dir)
 
 
             # Create for MCD64A1 because the files are in hdf format just 
@@ -79,13 +126,17 @@ def get_ts(site_directory):
                 LOG.error(f'{output_dir} this file is empty')
                 continue
 
+            # minX, maxX , minY, maxY should be in Sinusoidal and the above order
+            extent = (minX, maxX , minY, maxY)
+            
             # TATSSI Time Series Generator object
             tsg = Generator(source_dir=output_dir,
                      product=product_name,
                      version=version,
                      data_format='hdf',
                      progressBar=None,
-                     preprocessed=True)
+                     preprocessed=True,
+                     extent = extent)
             
             LOG.info('++++++++++++++++++++++++++++++++++++++++++')
             LOG.info(output_dir)
@@ -100,20 +151,21 @@ def get_ts(site_directory):
             LOG.info(f'time series generated for this product {n}')       
         
         
-def main(site_directory):
+def main(site_directory, json_path):
     '''
     INPUT
         site_directory - str - path to a specific site where all data were previously downloaded'''
-    get_ts(site_directory)
+    get_ts(site_directory, json_path)
     
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
 
         print("Usage: python script.py <site_directory>") # the user has to input one argument
     else:
         site_directory = sys.argv[1]
-        main(site_directory)
+        json_path = sys.argv[2]
+        main(site_directory, json_path)
 
 
 # example how to run this script in command line

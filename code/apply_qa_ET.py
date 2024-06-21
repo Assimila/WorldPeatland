@@ -12,43 +12,44 @@ from TATSSI.notebooks.helpers.time_series_interpolation import \
 
 
 sources = [
-        #'/wp_data/sites/Degero/MODIS/MCD15A3H.061/h18v02',
-#         '/wp_data/sites/kampar_1/MODIS/MCD15A3H.061/h28v08',
-        '/wp_data/sites/kampar_2/MODIS/MCD15A3H.061/h28v08',
-        '/wp_data/sites/kampar_3/MODIS/MCD15A3H.061/h28v08',
-        '/wp_data/sites/CongoNorth/MODIS/MCD15A3H.061/h19v08',
-        '/wp_data/sites/CongoSouth/MODIS/MCD15A3H.061/h19v09',
-        '/wp_data/sites/Norfolk/MODIS/MCD15A3H.061/h18v03',
-        '/wp_data/sites/MoorHouse/MODIS/MCD15A3H.061/h17v03',
-        '/wp_data/sites/HatfieldThorne/MODIS/MCD15A3H.061/h17v03',
-        '/wp_data/sites/Gnarrenburger/MODIS/MCD15A3H.061/h18v03',
-        '/wp_data/sites/MerBleue/MODIS/MCD15A3H.061/h12v04']
-
+#        '/wp_data/sites/Degero/MODIS/MOD16A2GF.061/h18v02',
+ #       '/wp_data/sites/kampar_1/MODIS/MOD16A2GF.061/h28v08',
+  #      '/wp_data/sites/kampar_2/MODIS/MOD16A2GF.061/h28v08',
+   #     '/wp_data/sites/kampar_3/MODIS/MOD16A2GF.061/h28v08',
+    #    '/wp_data/sites/CongoNorth/MODIS/MOD16A2GF.061/h19v08',
+     #   '/wp_data/sites/CongoSouth/MODIS/MOD16A2GF.061/h19v09',
+        '/wp_data/sites/Norfolk/MODIS/MOD16A2GF.061/h18v03',
+      #  '/wp_data/sites/MoorHouse/MODIS/MOD16A2GF.061/h17v03',
+       # '/wp_data/sites/HatfieldThorne/MODIS/MOD16A2GF.061/h17v03',
+        #'/wp_data/sites/Gnarrenburger/MODIS/MOD16A2GF.061/h18v03',
+        #'/wp_data/sites/MerBleue/MODIS/MOD16A2GF.061/h12v04']
+        ]
 outputs = [   
         #'/wp_data/sites/Degero/MODIS/analytics/',
-#         '/wp_data/sites/kampar_1/MODIS/analytics/',
-        '/wp_data/sites/kampar_2/MODIS/analytics/',
-        '/wp_data/sites/kampar_3/MODIS/analytics/', 
-        '/wp_data/sites/CongoNorth/MODIS/analytics/', 
-        '/wp_data/sites/CongoSouth/MODIS/analytics/',
+       # '/wp_data/sites/kampar_1/MODIS/analytics/',
+       # '/wp_data/sites/kampar_2/MODIS/analytics/',
+       # '/wp_data/sites/kampar_3/MODIS/analytics/', 
+       # '/wp_data/sites/CongoNorth/MODIS/analytics/', 
+       # '/wp_data/sites/CongoSouth/MODIS/analytics/',
         '/wp_data/sites/Norfolk/MODIS/analytics/',
-        '/wp_data/sites/MoorHouse/MODIS/analytics/', 
-        '/wp_data/sites/HatfieldThorne/MODIS/analytics/',
-        '/wp_data/sites/Gnarrenburger/MODIS/analytics/',
-        '/wp_data/sites/MerBleue/MODIS/analytics/']
-
+       # '/wp_data/sites/MoorHouse/MODIS/analytics/', 
+       # '/wp_data/sites/HatfieldThorne/MODIS/analytics/',
+       # '/wp_data/sites/Gnarrenburger/MODIS/analytics/',
+       # '/wp_data/sites/MerBleue/MODIS/analytics/']
+       ]
 d = dict(zip(sources, outputs))
 
 for source_dir, output_dir in d.items(): 
+
     print(source_dir)
-    product = 'MCD15A3H'
+    product = 'MOD16A2GF'
     version = '061'
     start_date = '01-06-2013' # dd-mm-yyyy
     end_date = '30-06-2023'
-    qa_def = 'FparLai_QC'
-    fname = "/workspace/WorldPeatland/QA_settings/MCD15A3H.061_FparLai_QC.json"
+    qa_def = 'ET_QC_500m'
+    fname = "/workspace/WorldPeatland/QA_settings/MOD16A2GF.061_ET_QC_500m.json"
     # set the data variable to be masked 
-    _data_var = '_Lai_500m'
+    _data_var = '_ET_500m'
 
     # Create the QA analytics object
     qa_analytics = Analytics(
@@ -112,3 +113,4 @@ for source_dir, output_dir in d.items():
 
     tsi = TimeSeriesInterpolation(qa_analytics, isNotebook=False)
     tsi.interpolate(progressBar=None)
+

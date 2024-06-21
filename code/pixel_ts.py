@@ -26,7 +26,7 @@ LOG.setLevel(logging.DEBUG)
 '''piexl_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
-def pixel_ts(path, _data_var, scaling_factor, period, site_name, detrend):
+def pixel_ts(path,site_directory, _data_var, scaling_factor, period, site_name, detrend):
     
     '''
     pixel_ts function will open the tatssi geotif linear and smoothened files, it will multiply it
@@ -48,13 +48,20 @@ def pixel_ts(path, _data_var, scaling_factor, period, site_name, detrend):
     # put the tiff in an xarray
     ds = create_xarr(saved_opn, _data_var, arr, dts)
     
+    if _data_var == '_Lai_500m':
+        scaling_factor = '0.1'
+    elif _data_var == '_Fpar_500m':
+        scaling_factor = '0.01'
+    else:
+        scaling_factor = scaling_factor
+
     # multiply by scaling factor
     ds = ds*float(scaling_factor)
     LOG.info(f'multiplying by the scale factor of {scaling_factor}')
 
     base, extension = os.path.splitext(os.path.basename(path))
 
-    path_analytics = create_dir(directory + site_name + '/MODIS/', 'timeSeries')
+    path_analytics = create_dir(site_directory + '/MODIS/', 'timeSeries')
     
     # period dictionary in days according to the data_var
     # period = 365/temporal resolution of the layer 
@@ -98,9 +105,9 @@ def main(site_directory, value):
     path_components = site_directory.split(os.sep)
     site_name = path_components[-1]
 
-    config_dir = site_directory + f'/{site_name}_config.yml'
-    start_date, end_date, products = read_config(config_dir)
-    
+    config = glob.glob(site_directory + f'*_config.yml') 
+    config_fname =  config[0]
+    start_date, end_date, products = read_config(config_fname)
     
     for i, j in enumerate(products):
     
@@ -115,12 +122,12 @@ def main(site_directory, value):
 
             scaling_factor, s, smoothing_method, period = j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period']
 
-            pattern = site_directory + f'/MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
+            pattern = site_directory + f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
             path = glob.glob(pattern)[0] 
             
             LOG.info(f'Processing this file {path}')
 
-            pixel_ts(path, _data_var, scaling_factor, period, site_name, detrend = value)
+            pixel_ts(path, site_directory,_data_var, scaling_factor, period, site_name, detrend = value)
 
     
 if __name__ == "__main__":
@@ -130,7 +137,7 @@ if __name__ == "__main__":
         print("Usage: python script.py <site_directory> <True/False>") # the user has to input two arguments  
     else:
         site_directory = sys.argv[1]
-        value = sys.argv[3].lower()
+        value = sys.argv[2].lower()
         
         if value == 'true':
             value = True

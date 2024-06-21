@@ -425,13 +425,13 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
         LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
 
         # only download s1
-        new_dwn_files = sd.download_raw_s1(path_sentinel +'/rawdata/', manual_key = site_area)
-        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+        #new_dwn_files = sd.download_raw_s1(path_sentinel +'/rawdata/', manual_key = site_area)
+        #sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
         # 1. Call SentinelDownloader class
-        start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
-        sd = SentinelDownloader(geojson_path, start_date.date(),
-                                end_date.date(), project=project)
+        #start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
+        #sd = SentinelDownloader(geojson_path, start_date.date(),
+        #                        end_date.date(), project=project)
 
         # only download s2 & ACM
         new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)

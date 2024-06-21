@@ -34,44 +34,39 @@ ch.setFormatter(formatter)
 # add ch to logger
 LOG.addHandler(ch)
 
-def main(site_directory):
+def main():
 
-    # get the specific config path for this site 
-    # to get the dates and the products
+    dirs = glob.glob(f'/wp_data/sites/*/')
+    dirs.sort()
+
+    for site_directory in dirs:
+
+        # get the specific config path for this site 
+        # to get the dates and the products
     
-    # get the site name from site_directory
-    path_components = site_directory.split(os.sep)
-    site_name = path_components[-1]
+        # get the site name from site_directory
+        config = glob.glob(site_directory + f'*_config.yml') 
+        config_fname =  config[0]
+        start_date, end_date, products = read_config(config_fname)
 
-
-    config = glob.glob(site_directory + f'*_config.yml') 
-    config_fname =  config[0]
-    start_date, end_date, products = read_config(config_fname)
-
-    for i , j  in enumerate(products):
-
-        product = j['product']
+        product = 'MOD16A2GF.061'
         
-        if product == 'MCD64A1.061':
-            continue
-        
-        smoothing_method, s = j['smooth_method'], j['smooth_factor']
+        smoothing_method, s = 'smoothn', '0.5'
 
-        pattern = site_directory + f'/MODIS/{product}/*/*/interpolated/*linear.tif'
+        pattern = site_directory + f'/MODIS/MOD16A2GF.061/*/*/interpolated/*linear.tif'
         f_list = glob.glob(pattern)
 
         for fname in f_list:
-            
             # Split the file name into base and extension
             base, extension = fname.rsplit('.', 1)
             output_fname = f"{base}.{smoothing_method}.{s}.{extension}"
-            
+
             LOG.info(f'smoothing started for {fname} with {smoothing_method} as smoothing method and this factor {s}')
               
             smoother = Smoothing(data=None, fname=fname,
-                                 output_fname=output_fname,
-                                 smoothing_method=smoothing_method,
-                                 s=float(s), progressBar=None)
+                                output_fname=output_fname,
+                                smoothing_method=smoothing_method,
+                                s=float(s), progressBar=None)
 
             smoother.smooth()
             
@@ -80,12 +75,11 @@ def main(site_directory):
             
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 1:
 
         print("Usage: python script.py <site_directory>") # the user has to input one argument
     else:
-        site_directory = sys.argv[1]
-        main(site_directory)
+        main()
         
 # # example of user input arguments
 # python smoothing.py /data/sites/Norfolk

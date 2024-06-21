@@ -19,19 +19,19 @@ from downloader_wp_test import *
 from TATSSI.time_series.generator import Generator  
     
     
-def get_ts():
-    
+def get_ts(modis_dir, json_path):
 
-    modis_dir = '/wp_data/sites/kampar_3/MODIS/MCD43A3.061/'
 
-    product_name, version = 'MCD43A3', '061'
+    print(modis_dir)
+    print(json_path)
+    product_name, version = 'MOD16A2GF', '061'
 
     # since we want to do the processing per tile 
     # glob will get all the tile files for the product we are looping in 
-    output_dir = '/wp_data/sites/kampar_3/MODIS/MCD43A3.061/h28v08/'
-    
-    json_path = '/workspace/WorldPeatland/sites/kampar_3.geojson'
-      
+    output_dir = glob.glob(modis_dir + f'*/MOD16A2GF.061/*/')
+    output_dir = output_dir[0]
+    print(output_dir)
+
     # Open the GeoJSON file
     driver = ogr.GetDriverByName("GeoJSON")
     src_GeoJSON = driver.Open(json_path)
@@ -83,8 +83,16 @@ def get_ts():
     tsg.generate_time_series()
         
 def main():
-    
-    get_ts()
+
+    jsons = glob.glob(f'/workspace/WorldPeatland/sites/*.geojson')
+    jsons.sort()
+    dirs = glob.glob(f'/wp_data/sites/*/')
+    dirs.sort()
+
+    d = dict(zip(dirs, jsons))
+
+    for modis_dir, json_path in d.items():
+        get_ts(modis_dir, json_path)
     
 if __name__ == "__main__":
 
@@ -98,4 +106,4 @@ if __name__ == "__main__":
 
 
     
-    
+

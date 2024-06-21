@@ -75,3 +75,7 @@ File /python/anaconda3/envs/worldpeatland/lib/python3.10/site-packages/IPython/u
 ---> 48     return builtin_mod.input(prompt)
 
 OSError: [Errno 9] Bad file descriptor
+  File "/workspace/WorldPeatland/code/ts_generator_wp.py", line 60
+    """
+    ^
+IndentationError: expected an indented block after function definition on line 59

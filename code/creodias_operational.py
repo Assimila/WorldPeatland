@@ -223,10 +223,10 @@ datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
 
 cloud_cover_le = 30
 
-OUTPUTDIR = '/wp_data/sites/CongoSouth/Sentinel/MSIL2A'
+OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/MSIL2A'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/CongoSouth.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
 extent = get_extent(geojson_fname) 
 polygon = get_polygon(geojson_fname)
 
@@ -282,5 +282,3 @@ for year in range(2017, 2024+1):
 
         # Create monthly COGs
         create_monthly_cogs(outputs, year, month)
-
-    break

@@ -19,11 +19,10 @@ class GeoJsonHandler:
         # setting _extent_wgs84
         self.set_extent_wgs84()
         # set the polygon bbox to get MODIS tiles 
-        set_polygon_bbox()
+        self.set_polygon_bbox()
         # transform extent coordinate system into sinusoidal
         self.get_extent_sinusoidal() 
 
-    @classmethod
     def __sanity_check(self):
         
         ''' 
@@ -39,14 +38,13 @@ class GeoJsonHandler:
         schema = json.load(schema_data)
         # load the input geojson file path
         json_object = open(self.geojson_path)
-        self.jsonData = json.load(json_object)
+        self._jsonData = json.load(json_object)
 
         validate(
-            instance=self.jsonData,
+            instance=self._jsonData,
             schema=schema,
         )
-    
-    @classmethod
+
     def set_str_attributes(self):
         
         ''' Set all string attributes from user input jsonData'''
@@ -54,13 +52,12 @@ class GeoJsonHandler:
         # TODO set in documentation a template of config 
         # list of available countries for VIIRS add to documentation
         
-        feat = self.jsonData['features'][0]['properties']
+        feat = self._jsonData['features'][0]['properties']
         if 'site_area' in feat:
             self.site_area = feat['site_area']
         if 'country' in feat:
             self.country = feat['country'] 
 
-    @classmethod
     def set_extent_wgs84(self):
         '''
         Extract GeoJson features, bbox layer of a GeoJson file site and gives an osgeo geometry object.
@@ -94,8 +91,7 @@ class GeoJsonHandler:
         finally:
             src_GeoJSON = None
             return True
-        
-    @classmethod
+
     def set_polygon_bbox(self):
         
         '''
@@ -105,7 +101,7 @@ class GeoJsonHandler:
             polygon (osgeo.ogr.Geometry) - polygon geometry object containing extent lat and lon of the site
         '''
         
-        min_x, max_x, min_y, max_y = self._extent
+        min_x, max_x, min_y, max_y = self._extent_wgs84
         ring = ogr.Geometry(ogr.wkbLinearRing)
         ring.AddPoint(min_x, min_y)
         ring.AddPoint(max_x, min_y)
@@ -116,8 +112,7 @@ class GeoJsonHandler:
         self.polygon.AddGeometry(ring)
         
         return True
-    
-    @classmethod
+
     def get_extent_sinusoidal(self):
         
         '''
@@ -162,3 +157,14 @@ class GeoJsonHandler:
         self.extent_sinusoidal = (minX, maxX, minY, maxY)
         
         return True
+
+    
+# Example run
+if __name__ == "__main__":
+# set a geojson path:
+    geojson_path = "/data/world_peatlands/src/WorldPeatland/sites/Gnarrenburger.geojson"
+    handler = GeoJsonHandler(geojson_path)
+    print(f"Site Name: {handler.site_area}")
+    print(f"Country: {handler.country}")
+    print(f"Extent WGS84: {handler._extent_wgs84}")
+    print(f"Extent Sinusoidal: {handler.extent_sinusoidal}")

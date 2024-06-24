@@ -1,1 +1,42 @@
-{"MODLAND": ["VI produced, good quality", "VI produced, but check other QA"], "VI Usefulness": ["Highest quality", "Lower quality", "Decreasing quality (0010)", "Decreasing quality (0011)", "Decreasing quality (0100)", "Decreasing quality (0101)", "Decreasing quality (0110)", "Decreasing quality (0111)", "Decreasing quality (1000)", "Decreasing quality (1001)", "Decreasing quality (1010)"], "Aerosol Quantity": ["Climatology", "Low"], "Adjacent cloud detected": ["No"], "Atmosphere BRDF Correction": ["No", "Yes"], "Mixed Clouds": ["No"], "Land/Water Mask": ["Land (Nothing else but land)"], "Possible snow/ice": ["No"], "Possible shadow": ["No"]}
+{
+    "MODLAND": [
+        "VI produced, good quality",
+        "VI produced, but check other QA"
+    ],
+    "VI Usefulness": [
+        "Highest quality",
+        "Lower quality",
+        "Decreasing quality (0010)",
+        "Decreasing quality (0011)",
+        "Decreasing quality (0100)",
+        "Decreasing quality (0101)",
+        "Decreasing quality (0110)",
+        "Decreasing quality (0111)",
+        "Decreasing quality (1000)",
+        "Decreasing quality (1001)",
+        "Decreasing quality (1010)"
+    ],
+    "Aerosol Quantity": [
+        "Climatology",
+        "Low"
+    ],
+    "Adjacent cloud detected": [
+        "No"
+    ],
+    "Atmosphere BRDF Correction": [
+        "No",
+        "Yes"
+    ],
+    "Mixed Clouds": [
+        "No"
+    ],
+    "Land/Water Mask": [
+        "Land (Nothing else but land)"
+    ],
+    "Possible snow/ice": [
+        "No"
+    ],
+    "Possible shadow": [
+        "No"
+    ]
+}

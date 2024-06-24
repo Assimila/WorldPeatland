@@ -1,1 +1,20 @@
-{"MODLAND": ["Good quality (main algorithm with or without saturation)", "Other Quality (back-up algorithm or fill values)"], "Sensor": ["Terra", "Aqua"], "DeadDetector": ["Detectors apparently fine for up to 50% of channels 1, 2"], "CloudState": ["Significant clouds NOT present (clear)"], "SCF_QC": ["Main (RT) method used, best result possible (no saturation)", "Main (RT) method used with saturation. Good, very usable"]}
+{
+    "MODLAND": [
+        "Good quality (main algorithm with or without saturation)",
+        "Other Quality (back-up algorithm or fill values)"
+    ],
+    "Sensor": [
+        "Terra",
+        "Aqua"
+    ],
+    "DeadDetector": [
+        "Detectors apparently fine for up to 50% of channels 1, 2"
+    ],
+    "CloudState": [
+        "Significant clouds NOT present (clear)"
+    ],
+    "SCF_QC": [
+        "Main (RT) method used, best result possible (no saturation)",
+        "Main (RT) method used with saturation. Good, very usable"
+    ]
+}

@@ -1,1 +1,20 @@
-{"MODLAND": ["LST produced, good quality, not necessary to examine more detailed QA", "LST produced, other quality, recommend examination of more detailed QA"], "Data Quality flag": ["Good data quality", "Other quality data"], "Emis Error flag": ["Average emissivity error <= 0.01", "Average emissivity error <= 0.02", "Average emissivity error <= 0.04"], "LST Error Flag": ["Average LST error <= 1K", "Average LST error <= 2K", "Average LST error <= 3K"]}
+{
+    "MODLAND": [
+        "LST produced, good quality, not necessary to examine more detailed QA",
+        "LST produced, other quality, recommend examination of more detailed QA"
+    ],
+    "Data Quality flag": [
+        "Good data quality",
+        "Other quality data"
+    ],
+    "Emis Error flag": [
+        "Average emissivity error <= 0.01",
+        "Average emissivity error <= 0.02",
+        "Average emissivity error <= 0.04"
+    ],
+    "LST Error Flag": [
+        "Average LST error <= 1K",
+        "Average LST error <= 2K",
+        "Average LST error <= 3K"
+    ]
+}

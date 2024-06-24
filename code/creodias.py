@@ -93,16 +93,20 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
 
     extent_native_crs = (minX, minY, maxX, maxY)
 
-    if len(input_dirs) == 1:
-        # Only create subset
-        options = gdal.WarpOptions(format='VRT',
-                outputBounds=extent_native_crs)
-        vrt = gdal.Warp(output_fname, input_dirs, options=options)
-    else:
-        # Create mosaic and subset
-        options = gdal.BuildVRTOptions(
-                outputBounds=extent_native_crs)
-        vrt = gdal.BuildVRT(output_fname, input_dirs, options=options)
+    # if len(input_dirs) == 1:
+    #     # Only create subset
+    #     options = gdal.WarpOptions(format='VRT',
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.Warp(output_fname, input_dirs, options=options)
+    # else:
+    #     # Create mosaic and subset
+    #     options = gdal.BuildVRTOptions(
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.BuildVRT(output_fname, input_dirs, options=options)
+
+    options = gdal.WarpOptions(format='VRT',
+            outputBounds=extent_native_crs)
+    vrt = gdal.Warp(output_fname, input_dirs, options=options)
 
     vrt = None
     del(vrt)
@@ -223,10 +227,10 @@ datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
 
 cloud_cover_le = 30
 
-OUTPUTDIR = '/wp_data/sites/CongoSouth/Sentinel/MSIL2A'
+OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/MSIL2A'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/CongoSouth.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
 extent = get_extent(geojson_fname) 
 polygon = get_polygon(geojson_fname)
 
@@ -242,8 +246,8 @@ url_end = (f"(Online eq true) and "
            f"(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.00%27)) or (Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
            f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
-for year in range(2017, 2024+1):
-    for month in range(1, 12+1):
+for year in range(2021, 2024+1):
+    for month in range(6, 12+1):
         start_date = f'{year}-{month:02}-01T00:00:00.000Z'
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'

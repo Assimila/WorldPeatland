@@ -221,13 +221,13 @@ datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
             'R60m' : ['B01'],
             'QI_DATA' : ['MSK_CLDPRB_20m']}
 
-cloud_cover_le = 30
+cloud_cover_le = 80
 
-OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/MSIL2A'
+OUTPUTDIR = '/wp_data/sites/kampar_1/Sentinel/MSIL2A'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
-extent = get_extent(geojson_fname) 
+geojson_fname = '/workspace/WorldPeatland/sites/kampar_1.geojson'
+extent = get_extent(geojson_fname)
 polygon = get_polygon(geojson_fname)
 
 url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter="
@@ -251,7 +251,8 @@ for year in range(2017, 2024+1):
         url = (f"{url_start}"
                f"(ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
                f"{url_end}")
-
+        
+        from IPython import embed; embed()
         # Encode URL
         url_encoded = requote_uri(url)
 
@@ -261,6 +262,10 @@ for year in range(2017, 2024+1):
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()
+        
+
+        break 
+
 
         S3Paths = []
 

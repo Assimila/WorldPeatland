@@ -67,7 +67,6 @@ def create_dir(path):
     return None
 
 def create_mosaic_subset(input_dirs, output_dir, extent, band):
-
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
         if len(fname) > 0:
@@ -93,16 +92,20 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
 
     extent_native_crs = (minX, minY, maxX, maxY)
 
-    if len(input_dirs) == 1:
-        # Only create subset
-        options = gdal.WarpOptions(format='VRT',
-                outputBounds=extent_native_crs)
-        vrt = gdal.Warp(output_fname, input_dirs, options=options)
-    else:
-        # Create mosaic and subset
-        options = gdal.BuildVRTOptions(
-                outputBounds=extent_native_crs)
-        vrt = gdal.BuildVRT(output_fname, input_dirs, options=options)
+    # if len(input_dirs) == 1:
+    #     # Only create subset
+    #     options = gdal.WarpOptions(format='VRT',
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.Warp(output_fname, input_dirs, options=options)
+    # else:
+    #     # Create mosaic and subset
+    #     options = gdal.BuildVRTOptions(
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.BuildVRT(output_fname, input_dirs, options=options)
+
+    options = gdal.WarpOptions(format='VRT',
+            outputBounds=extent_native_crs)
+    vrt = gdal.Warp(output_fname, input_dirs, options=options)
 
     vrt = None
     del(vrt)
@@ -221,13 +224,13 @@ datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
             'R60m' : ['B01'],
             'QI_DATA' : ['MSK_CLDPRB_20m']}
 
-cloud_cover_le = 80
+cloud_cover_le = 30
 
-OUTPUTDIR = '/wp_data/sites/kampar_1/Sentinel/MSIL2A'
+OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/MSIL2A'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/kampar_1.geojson'
-extent = get_extent(geojson_fname)
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
+extent = get_extent(geojson_fname) 
 polygon = get_polygon(geojson_fname)
 
 url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter="
@@ -242,8 +245,8 @@ url_end = (f"(Online eq true) and "
            f"(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.00%27)) or (Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
            f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
-for year in range(2017, 2024+1):
-    for month in range(1, 12+1):
+for year in range(2021, 2024+1):
+    for month in range(6, 12+1):
         start_date = f'{year}-{month:02}-01T00:00:00.000Z'
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
@@ -251,21 +254,15 @@ for year in range(2017, 2024+1):
         url = (f"{url_start}"
                f"(ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
                f"{url_end}")
-        
-        from IPython import embed; embed()
+
         # Encode URL
         url_encoded = requote_uri(url)
 
         # Remove unnecessasary characters from encoded URL
         url_encoded_cleared = url_encoded.replace('%0A', '')
-
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()
-        
-
-        break 
-
 
         S3Paths = []
 
@@ -287,3 +284,5 @@ for year in range(2017, 2024+1):
 
         # Create monthly COGs
         create_monthly_cogs(outputs, year, month)
+
+    break

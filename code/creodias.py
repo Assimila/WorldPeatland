@@ -261,7 +261,6 @@ for year in range(2021, 2024+1):
 
         # Remove unnecessasary characters from encoded URL
         url_encoded_cleared = url_encoded.replace('%0A', '')
-
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()

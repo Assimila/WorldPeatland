@@ -67,22 +67,16 @@ def create_dir(path):
     return None
 
 def create_mosaic_subset(input_dirs, output_dir, extent, band):
-
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
         if len(fname) > 0:
             input_dirs[i] = fname[0]
         #TODO Check that files exist
 
-    create_dir(output_dir)
-    if band == 'MSK_CLDPRB_20m':
-        _fname = os.path.basename(str(Path(input_dirs[0]).parent.parent.absolute()))
-        output_fname = f'{_fname}_{band}'
-    else:
+        create_dir(output_dir)
         output_fname = os.path.splitext(os.path.basename(input_dirs[0]))[0]
-
-    output_fname = os.path.join(output_dir, output_fname) 
-    output_fname = f'{output_fname}.vrt'
+        output_fname = os.path.join(output_dir, output_fname) 
+        output_fname = f'{output_fname}.vrt'
 
     # Get extent in native CRS
     dst_crs = get_crs(input_dirs[0])
@@ -114,12 +108,12 @@ def get_crs(fname):
     Get CRS in WKT string from a single file
     """
     d = gdal.Open(fname)
-    proj = d.GetProjection()
+    proj = d.GetGCPProjection()
     return proj
 
-def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_SR'):
+def create_daily_vrts(S3Paths, year, month, days, extent, product='S1_GRD'):
     """
-    Create mosaics for daily set of Sentinel-2 acquisitions
+    Create mosaics for daily set of Sentinel-1 acquisitions
     """
     # Dictionary to store all ouputs per dataset-band
     outputs = {}
@@ -135,31 +129,27 @@ def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_SR'):
         if len(images) == 0:
             images = []
             continue
-
         # If there is a single image just subset 
-        for dataset in datasets:
-            for band in datasets[dataset]:
-                if band == 'MSK_CLDPRB_20m':
-                    img_path = f'GRANULE/*/{dataset}/*{band}*.jp2'
-                else:
-                    img_path = f'GRANULE/*/*_DATA/{dataset}/*{band}*.jp2'
-                output_dir = os.path.join(OUTPUTDIR, 'datacube',
-                        product, band, 'VRTs')
+        for band in datasets:
 
-                images_path = []
-                for i in range(len(images)):
-                    images_path.append(os.path.join(images[i], img_path))
+            img_path = f'measurement/*{band}*.tiff'
+            output_dir = os.path.join(OUTPUTDIR, 'datacube',
+                     product, band, 'VRTs')
 
-                ouput_fnames = create_mosaic_subset(images_path,
-                        output_dir, extent, band)
+            images_path = []
+            for i in range(len(images)):
+                images_path.append(os.path.join(images[i], img_path))
 
-                if band in outputs:
-                    outputs[band].append(ouput_fnames)
-                else:
-                    outputs[band] = [ouput_fnames]
+            ouput_fnames = create_mosaic_subset(images_path,
+                    output_dir, extent, band)
+
+            if band in outputs:
+                outputs[band].append(ouput_fnames)
+            else:
+                outputs[band] = [ouput_fnames]
     return outputs
 
-def create_monthly_cogs(ouputs, year, month, product='S2_SR'):
+def create_monthly_cogs(ouputs, year, month, product='S1_GRD'):
     """
     Create monthly DataCube COGs
     """
@@ -172,14 +162,10 @@ def create_monthly_cogs(ouputs, year, month, product='S2_SR'):
         build_options = gdal.BuildVRTOptions(separate=True)
         vrt = gdal.BuildVRT(output_vrt_fname, outputs[dataset],
                 options=build_options)
-
         for i in range(vrt.RasterCount):
             _time = outputs[dataset][i]
             _time = os.path.basename(_time)
-            if dataset == 'MSK_CLDPRB_20m':
-                _time = _time.split('_')[3]
-            else:
-                _time = _time.split('_')[1]
+            _time = _time.split('-')[4]
 
             _time = str(pd.to_datetime(_time, format='%Y%m%dT%H%M%S'))
 
@@ -195,7 +181,6 @@ def create_monthly_cogs(ouputs, year, month, product='S2_SR'):
         vrt = None ; del(vrt)
 
         translate_options = gdal.TranslateOptions(format='GTiff')
-
         # Get output dir from first VRT
         output_dir = Path(outputs[dataset][0])
         output_dir = str(output_dir.parent.parent.absolute())
@@ -216,21 +201,18 @@ def create_monthly_cogs(ouputs, year, month, product='S2_SR'):
 # - Creates monthly DQ COGs for every month
 # =======================================================================#
 
-datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
-            'R20m' : ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
-            'R60m' : ['B01'],
-            'QI_DATA' : ['MSK_CLDPRB_20m']}
+datasets =  ['vh', 'vv']
 
-OUTPUTDIR = '/wp_data/sites/kampar_1/Sentinel/S1GRD'
+OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/S1GRD'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/kampar_1.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
 extent = get_extent(geojson_fname)
 polygon = get_polygon(geojson_fname)
 
 url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter=")
 
-url_end = (f"(((((Collection/Name%20eq%20%27SENTINEL-1%27)%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27A%27))%20or%20(Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27B%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27GRD-COG%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27operationalMode%27%20and%20i0/Value%20eq%20%27IW%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27orbitDirection%27%20and%20i0/Value%20eq%20%27ASCENDING%27))%20or%20(Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27orbitDirection%27%20and%20i0/Value%20eq%20%27DESCENDING%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27polarisationChannels%27%20and%20i0/Value%20eq%20%27VV%26VH%27)))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20")
+url_end = (f"(((((Collection/Name%20eq%20%27SENTINEL-1%27)%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27A%27))%20or%20(Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27B%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27GRD%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27operationalMode%27%20and%20i0/Value%20eq%20%27IW%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27orbitDirection%27%20and%20i0/Value%20eq%20%27ASCENDING%27))%20or%20(Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27orbitDirection%27%20and%20i0/Value%20eq%20%27DESCENDING%27))))%20and%20(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27polarisationChannels%27%20and%20i0/Value%20eq%20%27VV%26VH%27)))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20")
 
 for year in range(2017, 2024+1):
     for month in range(1, 12+1):
@@ -251,8 +233,6 @@ for year in range(2017, 2024+1):
         # Remove unnecessasary characters from encoded URL
         url_encoded_cleared = url_encoded.replace('%0A', '')
         
-        from IPython import embed; embed()
-
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()
@@ -271,7 +251,7 @@ for year in range(2017, 2024+1):
             except FileExistsError:
                 print(f"{element['S3Path']} already exists")
                 print()
-
+        
         # Create daily VRTs
         outputs = create_daily_vrts(S3Paths, year, month, end_day, extent)
 

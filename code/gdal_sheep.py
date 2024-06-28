@@ -41,7 +41,7 @@ def gdal_dt(e, time):
         # the time data
         x = meta[time]
         # also check the metadata to see how is the format of datetime data
-        dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
+        dt_format = '%Y-%m-%d %H:%M:%S' # '%Y-%m-%dT%H:%M:%S.000000000'
         #dt_format = '%Y-%m-%d'
         t = dt.strptime(x, dt_format)
             

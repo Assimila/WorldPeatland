@@ -263,9 +263,7 @@ for year in range(2021, 2024+1):
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()
-
         S3Paths = []
-
         for i, element in enumerate(response['value']):
             S3Paths.append(element['S3Path'])
 

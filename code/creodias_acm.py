@@ -279,8 +279,11 @@ def run_acm(outputs, product='S2_TOA'):
         # save the xarray as geotiff 
         fname = output_dir + f'/ACM_{t}.tif'
         save_xarray_old(fname, ds, 'cprob')
-    
-        outputs_acm['ACM'] = [fname]
+
+        if 'ACM' in outputs_acm:
+            outputs['ACM'].append(fname)
+        else:
+            outputs['ACM'] = [fname]
 
     return outputs_acm
 
@@ -297,7 +300,6 @@ def calculate_acm(flist):
         - reshaped_cprob - (numpy array) with the shape od B02 clipped vrt
             containing the calculated cloud probability mask
     """
-
     ls= []
     for path in flist:
 
@@ -314,8 +316,8 @@ def calculate_acm(flist):
     # image because all bands are regridded to follow B02
     stack_arr = np.stack(ls, axis = 0)
     
-    # multiply by scaling factor (/10000)
-    _stack_arr = stack_arr * 0.0001
+    # remove offset and multiply by scaling factor (/10000)
+    _stack_arr = (stack_arr - 1000) / 10000
     shp = _stack_arr.shape
 
     # per pixel array 
@@ -336,24 +338,23 @@ def calculate_acm(flist):
 
 
 
-def create_monthly_cogs(ouputs, year, month, product = 'S2_TOA'):
+def create_monthly_cogs(ouputs_acm, year, month, product = 'S2_TOA'):
     """
     Create monthly DataCube COGs
     """
     
-    from IPython import embed; embed()
-    for dataset in outputs:
+    for dataset in outputs_acm:
          # Get unique filename and check it doesnt exist in tmp_path
         f = tempfile.NamedTemporaryFile(mode='w+b', delete=True,
                                         dir='/tmp', suffix=".vrt")
         output_vrt_fname = f.name
 
         build_options = gdal.BuildVRTOptions(separate=True)
-        vrt = gdal.BuildVRT(output_vrt_fname, outputs[dataset],
+        vrt = gdal.BuildVRT(output_vrt_fname, outputs_acm[dataset],
                 options=build_options)
 
         for i in range(vrt.RasterCount):
-            _time = outputs[dataset][i]
+            _time = outputs_acm[dataset][i]
             _time = os.path.basename(_time)
             if dataset == 'MSK_CLDPRB_20m':
                 _time = _time.split('_')[3]
@@ -373,14 +374,14 @@ def create_monthly_cogs(ouputs, year, month, product = 'S2_TOA'):
             band.SetMetadataItem('product', product)
             band.SetMetadataItem('scale_factor', '1.0')
             band.SetMetadataItem('time', _time)
-            band.SetMetadataItem('version', 'Sentinel-2_L1C')
+            band.SetMetadataItem('version', 'Sentinel-2_ACM')
 
         vrt = None ; del(vrt)
 
         translate_options = gdal.TranslateOptions(format='GTiff')
 
         # Get output dir from first VRT
-        output_dir = Path(outputs[dataset][0])
+        output_dir = Path(outputs_acm[dataset][0])
         output_dir = str(output_dir.parent.absolute())
         # Output file name
         output_cog_fname = f'{product}_{dataset}_{year}-{month:02}.tif'
@@ -392,6 +393,10 @@ def create_monthly_cogs(ouputs, year, month, product = 'S2_TOA'):
         # Cleant tmp variables
         tmp_ds = None ; del(tmp_ds)
         f = None ; del(f)
+    
+        # remove all single timestep ACM tif files
+        for f in outputs_acm[dataset]:
+            os.remove(f)
 
 
 
@@ -402,10 +407,10 @@ def create_monthly_cogs(ouputs, year, month, product = 'S2_TOA'):
 datasets =  ['B01','B02', 'B04', 'B05', 'B08',
             'B8A', 'B09', 'B10', 'B11', 'B12']
             
-OUTPUTDIR = '/wp_data/sites/MerBleue/Sentinel/MSIL1C'
+OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL1C'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/MerBleue.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
 extent = get_extent(geojson_fname) 
 polygon = get_polygon(geojson_fname)
 
@@ -461,4 +466,3 @@ for year in range(2017, 2024+1):
         # Create monthly COGs
         create_monthly_cogs(outputs_acm, year, month)
 
-    break

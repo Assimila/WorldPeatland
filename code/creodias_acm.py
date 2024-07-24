@@ -73,16 +73,65 @@ def create_dir(path):
 
     return None
 
-def set_target_img(product = 'S2_TOA'):
 
-    # take the first S3Path and gets in B02 image 
-    # set it as target img
-    path = os.path.join(OUTPUTDIR, 'datacube',product, 'B02/VRTs') + f'/*.vrt'
-    target = glob(path)[0]
+def get_spatial_reference(img_path):
+    """
+    get spatial reference from input img path
+    """
+    
+    opn = gdal.Open(img_path)
 
-    return target
+    if opn is None:
+        raise FileNotFoundError(f"Unable to open {image_path}")
+    proj_wkt = opn.GetProjection()
+    srs = osr.SpatialReference(wkt=proj_wkt)
+
+    return srs
+
+def reproject_srs(img_path, output_path, target_srs):
+    opn = gdal.Open(img_path)
+
+    if opn is None:
+        raise FileNotFoundError(f"Unable to open {image_path}")
+    
+    # Reproject the image 
+    gdal.Warp(output_path, opn, dstSRS=target_srs.ExportToWkt())
+    
+
+def check_srs(img_list, output_dir):
+    """
+    check srs of all images in the list, if different reproject
+    if not return True
+
+    INPUTS
+        - img_list - list of str paths to the images
+        - output_dir - str to the path of the site specific 
+            S2 repository
+    """
+    # set the target image srs to be the first image of the month  
+    reference_srs = get_spatial_reference(img_list[0])
+    reproj_inputs_dirs = []
+    for img_path in img_list:
+        
+        # get img_path srs
+        srs = get_spatial_reference(img_path)
+        if not reference_srs.IsSame(srs):
+            reproj_img_path = Path(img_path).name
+            reproj_img_path = reproj_img_path.replace(".jp2", "_reprojected.jp2")
+            reproj_img_path = os.path.join(output_dir, reproj_img_path)
+            
+            # run the reprojection function 
+            reproject_srs(img_path, reproj_img_path, reference_srs)
+            reproj_inputs_dirs.append(reproj_img_path)
+            
+        else:
+            reproj_inputs_dirs.append(img_path)
+    
+    return reproj_inputs_dirs
+    
 
 def create_mosaic_subset(input_dirs, output_dir, extent, band):
+    
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
         if len(fname) > 0:
@@ -90,12 +139,9 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
         #TODO Check that files exist
 
     create_dir(output_dir)
-    output_fname = os.path.splitext(os.path.basename(input_dirs[0]))[0]
+    fname = os.path.splitext(os.path.basename(input_dirs[0]))[0]
 
-    output_fname = os.path.join(output_dir, output_fname) 
-    output_fname = f'{output_fname}.vrt'
-    
-    mosaic_fname = f'{output_fname}.mosaic.vrt'
+    output_fname = os.path.join(output_dir, fname) 
     
     #TODO reproject to the crs with the highest percentage of coverage
 
@@ -107,6 +153,12 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
             output_crs=dst_crs)
 
     extent_native_crs = (minX, minY, maxX, maxY)
+    output_fname = f'{output_fname}.vrt'
+
+    # check that the file is the same UTM zone 
+    input_dirs = check_srs(input_dirs, output_dir)
+
+
     if len(input_dirs) == 1:
 
         options = gdal.WarpOptions(format='VRT',
@@ -117,9 +169,23 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
         del(vrt)
 
     else:
+        # check all imgs have the same projection
+        # pick for now img[0] as reference
+        # run check/reprojection
+        inputs_dirs = check_srs(input_dirs, output_dir)
+
         # Create mosaic and subset
-        mosaic_fname = f'{output_fname}.mosaic.vrt'
-        mosaic = gdal.BuildVRT(mosaic_fname, input_dirs)
+        # Create a mosaic directory inside every band to avoid picking 
+        # the mosaic files at a later stage instead of the actual clipped
+        # vrt (will get an error of dataset with different shapes)
+        # cannot delete the mosaics because they are the pointers to the
+        # clipped vrts created later
+        mosaic_dir = output_dir + '/mosaics'
+        create_dir(mosaic_dir)
+        
+        mosaic_fname = os.path.join(mosaic_dir, fname)
+        mosaic_fname = f'{mosaic_fname}_mosaic.vrt'
+        mosaic = gdal.BuildVRT(mosaic_fname, inputs_dirs)
         mosaic.FlushCache()
         mosaic = None
 
@@ -133,12 +199,14 @@ def create_mosaic_subset(input_dirs, output_dir, extent, band):
     return output_fname
 
 
-def reproject_to_B02(fname):
+def reproject_to_B02(fname, target_img):
     """
     reproject all images to B02 resolution to be able to stack the arrays 
+
+    INPUTS
+
+        - target_img - str B02 file path
     """
-    
-    target_img = set_target_img()
     
     g = reproject_image(fname, target_img, clip_shapefile = None, no_data_val = -9999)
     
@@ -191,7 +259,6 @@ def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_TOA'):
             images_path = []
             for i in range(len(images)):
                 images_path.append(os.path.join(images[i], img_path))
-
             output_fnames = create_mosaic_subset(images_path,
                     output_dir, extent, band)
 
@@ -252,7 +319,6 @@ def run_acm(outputs, product='S2_TOA'):
 
     output_dir = os.path.join(OUTPUTDIR, 'datacube', product, 'ACM')
     create_dir(output_dir)
-
     timesteps = get_timesteps(outputs)
     
     for i, t in enumerate(timesteps):
@@ -272,7 +338,6 @@ def run_acm(outputs, product='S2_TOA'):
         dt = str(pd.to_datetime(t, format='%Y%m%dT%H%M%S'))
         # create a datetime index 
         dt = pd.date_range(dt, periods=1)
-        
         # create the xarray 
         ds = create_xarr(opn, 'cprob', cprob_arr[np.newaxis, :, :], dt)
         ds.attrs['crs'] = proj4_string 
@@ -281,9 +346,9 @@ def run_acm(outputs, product='S2_TOA'):
         save_xarray_old(fname, ds, 'cprob')
 
         if 'ACM' in outputs_acm:
-            outputs['ACM'].append(fname)
+            outputs_acm['ACM'].append(fname)
         else:
-            outputs['ACM'] = [fname]
+            outputs_acm['ACM'] = [fname]
 
     return outputs_acm
 
@@ -303,8 +368,8 @@ def calculate_acm(flist):
     ls= []
     for path in flist:
 
-        # regrid 
-        g = reproject_to_B02(path)
+        # regrid flist[1] is the B02 path 
+        g = reproject_to_B02(path, flist[1])
         # seems like the arr is flipping the x and y size position??
         arr = g.ReadAsArray()
         ls.append(arr)
@@ -407,10 +472,13 @@ def create_monthly_cogs(ouputs_acm, year, month, product = 'S2_TOA'):
 datasets =  ['B01','B02', 'B04', 'B05', 'B08',
             'B8A', 'B09', 'B10', 'B11', 'B12']
             
-OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL1C'
+cloud_cover_le = 30
+
+
+OUTPUTDIR = '/wp_data/sites/Norfolk/Sentinel/MSIL1C'
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
 extent = get_extent(geojson_fname) 
 polygon = get_polygon(geojson_fname)
 
@@ -419,7 +487,8 @@ polygon = get_polygon(geojson_fname)
 # Sentinel_2: platform A & B, S2MSI1C, and collection 1 
 # collection 1 gives only the L1_N500 products 
 
-url_start = f"https://datahub.creodias.eu/odata/v1/Products?$filter="
+url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter="
+             f"((Attributes/OData.CSC.DoubleAttribute/any(i0:i0/Name eq %27cloudCover%27 and i0/Value le {cloud_cover_le})) and ")
 
 url_end = (f"(Online eq true) and "
            f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
@@ -429,13 +498,13 @@ url_end = (f"(Online eq true) and "
 
 
 for year in range(2017, 2024+1):
-    for month in range(6, 12+1):
+    for month in range(1, 12+1):
         start_date = f'{year}-{month:02}-01T00:00:00.000Z'
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
 
         url = (f"{url_start}"
-               f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
+               f"(ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
                f"{url_end}")
 
         # Encode URL
@@ -462,7 +531,13 @@ for year in range(2017, 2024+1):
         # Create daily VRTs
         outputs = create_daily_vrts(S3Paths, year, month, end_day, extent)
         # Calculate ACM
-        outputs_acm = run_acm(outputs, product='S2_TOA')
-        # Create monthly COGs
-        create_monthly_cogs(outputs_acm, year, month)
+        if not outputs :
+            continue
+        else:
+            outputs_acm = run_acm(outputs, product='S2_TOA')
+            # Check srs of the time steps in a month 
+            output_dir = os.path.join(OUTPUTDIR, 'datacube', 'S2_TOA', 'ACM')
+            outputs_acm['ACM'] = check_srs(outputs_acm['ACM'], output_dir)
 
+            # Create monthly COGs
+            create_monthly_cogs(outputs_acm, year, month)

@@ -79,3 +79,31 @@ OSError: [Errno 9] Bad file descriptor
     """
     ^
 IndentationError: expected an indented block after function definition on line 59
+/eodata/Sentinel-2/MSI/L1C_N0500/2017/06/03/S2A_MSIL1C_20170603T101031_N0500_R022_T34WDS_20230921T071919.SAFE already exists
+
+/eodata/Sentinel-2/MSI/L1C_N0500/2017/06/13/S2A_MSIL1C_20170613T101031_N0500_R022_T34WDS_20230904T161820.SAFE already exists
+
+/eodata/Sentinel-2/MSI/L1C_N0500/2017/06/14/S2B_MSIL1C_20170614T103019_N0500_R108_T34WDS_20230904T160334.SAFE already exists
+
+Traceback (most recent call last):
+  File "/workspace/WorldPeatland/code/creodias_acm.py", line 526, in <module>
+    outputs = create_daily_vrts(S3Paths, year, month, end_day, extent)
+  File "/workspace/WorldPeatland/code/creodias_acm.py", line 255, in create_daily_vrts
+    output_fnames = create_mosaic_subset(images_path,
+  File "/workspace/WorldPeatland/code/creodias_acm.py", line 130, in create_mosaic_subset
+    fname = glob(input_dirs[i])
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 24, in glob
+    return list(iglob(pathname, root_dir=root_dir, dir_fd=dir_fd, recursive=recursive))
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 85, in _iglob
+    for dirname in dirs:
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 85, in _iglob
+    for dirname in dirs:
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 86, in _iglob
+    for name in glob_in_dir(_join(root_dir, dirname), basename, dir_fd, dironly):
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 94, in _glob1
+    names = _listdir(dirname, dir_fd, dironly)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 164, in _listdir
+    return list(it)
+  File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 149, in _iterdir
+    if not dironly or entry.is_dir():
+KeyboardInterrupt

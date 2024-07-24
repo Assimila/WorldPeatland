@@ -246,7 +246,7 @@ url_end = (f"(Online eq true) and "
            f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
 for year in range(2021, 2024+1):
-    for month in range(6, 12+1):
+    for month in range(1, 12+1):
         start_date = f'{year}-{month:02}-01T00:00:00.000Z'
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'

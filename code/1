@@ -10,8 +10,6 @@ import pandas as pd
 import json
 from pyproj import Transformer
 from calendar import monthrange
-import xml.etree.ElementTree as ET
-
 
 def transform_coordinate(x: float, y: float,
     output_crs: str,
@@ -68,7 +66,7 @@ def create_dir(path):
 
     return None
 
-def create_subset(input_dirs, output_dir, extent, band):
+def create_mosaic_subset(input_dirs, output_dir, extent, band):
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
         if len(fname) > 0:
@@ -93,6 +91,17 @@ def create_subset(input_dirs, output_dir, extent, band):
             output_crs=dst_crs)
 
     extent_native_crs = (minX, minY, maxX, maxY)
+
+    # if len(input_dirs) == 1:
+    #     # Only create subset
+    #     options = gdal.WarpOptions(format='VRT',
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.Warp(output_fname, input_dirs, options=options)
+    # else:
+    #     # Create mosaic and subset
+    #     options = gdal.BuildVRTOptions(
+    #             outputBounds=extent_native_crs)
+    #     vrt = gdal.BuildVRT(output_fname, input_dirs, options=options)
 
     options = gdal.WarpOptions(format='VRT',
             outputBounds=extent_native_crs)
@@ -129,6 +138,7 @@ def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_SR'):
         if len(images) == 0:
             images = []
             continue
+
         # If there is a single image just subset 
         for dataset in datasets:
             for band in datasets[dataset]:
@@ -143,7 +153,7 @@ def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_SR'):
                 for i in range(len(images)):
                     images_path.append(os.path.join(images[i], img_path))
 
-                ouput_fnames = create_subset(images_path,
+                ouput_fnames = create_mosaic_subset(images_path,
                         output_dir, extent, band)
 
                 if band in outputs:
@@ -152,48 +162,7 @@ def create_daily_vrts(S3Paths, year, month, days, extent, product='S2_SR'):
                     outputs[band] = [ouput_fnames]
     return outputs
 
-def get_mean_azimuth_angle(metadata):
-    """
-    get azimuth angle metadata from the MTD.xml file in SAFE
-    
-    INPUT
-        - metadata - str of the MTD.xml file path 
-
-    OUTPUT
-        - azimuth_angle - str one value (per timestep)
-    code reference:
-    https://gis.stackexchange.com/questions/471487/get-mean-solar-azimuth-angle-from-sentinel-2-l2a-product
-    """
-
-    tree = ET.parse(metadata)
-    root = tree.getroot()
-
-    tile_angles_element = root.find('.//Tile_Angles')
-    if tile_angles_element is not None:
-        mean_sun_angle_element = tile_angles_element.find('.//Mean_Sun_Angle')
-        if mean_sun_angle_element is not None:
-            azimuth_angle = mean_sun_angle_element.find('./AZIMUTH_ANGLE').text
-        else:
-            print("No Mean Sun Angle was found")
-            return
-        return azimuth_angle
-
-def get_metadata_path(time, S3Paths):
-    """
-    get the MTD_xml file path from matching the time component 
-    in the S3Paths file names
-    """
-
-    MTD_path = f'GRANULE/*/MTD_TL.xml'
-
-    metadata = next((
-        path for path in S3Paths if time in path), 
-        None)
-    metadata = glob(os.path.join(metadata, MTD_path))
-    return metadata[0] 
-
-
-def create_monthly_cogs(ouputs, year, month, S3Paths, product='S2_SR'):
+def create_monthly_cogs(ouputs, year, month, product='S2_SR'):
     """
     Create monthly DataCube COGs
     """
@@ -206,29 +175,20 @@ def create_monthly_cogs(ouputs, year, month, S3Paths, product='S2_SR'):
         build_options = gdal.BuildVRTOptions(separate=True)
         vrt = gdal.BuildVRT(output_vrt_fname, outputs[dataset],
                 options=build_options)
+
         for i in range(vrt.RasterCount):
-            
             _time = outputs[dataset][i]
             _time = os.path.basename(_time)
             if dataset == 'MSK_CLDPRB_20m':
                 _time = _time.split('_')[3]
             else:
                 _time = _time.split('_')[1]
-            
-            band = vrt.GetRasterBand(i+1)
-
-            metadata = get_metadata_path(_time, S3Paths)
-            
-            if metadata:
-
-                azimuth_angle = get_mean_azimuth_angle(metadata)
-                band.SetMetadataItem('azimuth_angle', azimuth_angle)
-            else:
-                print('azimuth angle not found')
 
             _time = str(pd.to_datetime(_time, format='%Y%m%dT%H%M%S'))
 
+            band = vrt.GetRasterBand(i+1)
             band.SetMetadataItem('add_offset', '0')
+            band.SetMetadataItem('data_var', product)
             band.SetMetadataItem('fill_value', '999')
             band.SetMetadataItem('product', product)
             band.SetMetadataItem('scale_factor', '1.0')
@@ -261,7 +221,8 @@ def create_monthly_cogs(ouputs, year, month, S3Paths, product='S2_SR'):
 
 datasets = {'R10m' : ['B02', 'B03', 'B04', 'B08'],
             'R20m' : ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12', 'SCL'],
-            'R60m' : ['B01']}
+            'R60m' : ['B01'],
+            'QI_DATA' : ['MSK_CLDPRB_20m']}
 
 cloud_cover_le = 30
 
@@ -284,8 +245,8 @@ url_end = (f"(Online eq true) and "
            f"(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.00%27)) or (Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
            f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
-for year in range(2017, 2024+1):
-    for month in range(1, 12+1):
+for year in range(2021, 2024+1):
+    for month in range(6, 12+1):
         start_date = f'{year}-{month:02}-01T00:00:00.000Z'
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
@@ -302,18 +263,9 @@ for year in range(2017, 2024+1):
         # Obtain and print the response
         response = requests.get(url_encoded_cleared)
         response = response.json()
-        # set unique aquisition dates
-        # these dates includes milliseconds, it would be impossible to have 
-        # the same full dates with different coverage over the site
-        aquisition_dates = set()
         S3Paths = []
         for i, element in enumerate(response['value']):
-            # Get aquisition date first date in the S3Path file name
-            aquisition_date = os.path.basename(element['S3Path']).split('_')[2]
-            # Check if the date is not already there
-            if aquisition_date not in aquisition_dates:
-                aquisition_dates.add(aquisition_date)
-                S3Paths.append(element['S3Path'])
+            S3Paths.append(element['S3Path'])
 
             image_name = os.path.basename(element['S3Path'])
             new_dir = os.path.join(OUTPUTDIR, image_name)
@@ -324,9 +276,11 @@ for year in range(2017, 2024+1):
             except FileExistsError:
                 print(f"{element['S3Path']} already exists")
                 print()
+        from IPython import embed; embed()
         # Create daily VRTs
         outputs = create_daily_vrts(S3Paths, year, month, end_day, extent)
+
         # Create monthly COGs
-        create_monthly_cogs(outputs, year, month, S3Paths)
+        create_monthly_cogs(outputs, year, month)
 
-
+    break

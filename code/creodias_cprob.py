@@ -349,7 +349,7 @@ def run_cprob(outputs, product='S2_TOA'):
         else:
             outputs_cprob['cprob'] = [fname]
 
-    return outputs_cprob_
+    return outputs_cprob
 
 
 def calculate_cprob(flist):

@@ -68,6 +68,63 @@ def create_dir(path):
 
     return None
 
+def get_spatial_reference(img_path):
+    """
+    get spatial reference from input img path
+    """
+
+    opn = gdal.Open(img_path)
+
+    if opn is None:
+        raise FileNotFoundError(f"Unable to open {image_path}")
+    proj_wkt = opn.GetProjection()
+    srs = osr.SpatialReference(wkt=proj_wkt)
+
+    return srs
+
+def reproject_srs(img_path, output_path, target_srs):
+    opn = gdal.Open(img_path)
+
+    if opn is None:
+        raise FileNotFoundError(f"Unable to open {image_path}")
+
+    # Reproject the image
+    gdal.Warp(output_path, opn, dstSRS=target_srs.ExportToWkt())
+
+
+
+
+def check_srs(img_list, output_dir):
+    """
+    check srs of all images in the list, if different reproject
+    if not return True
+
+    INPUTS
+        - img_list - list of str paths to the images
+        - output_dir - str to the path of the site specific
+            S2 repository
+    """
+    # set the target image srs to be the first image of the month
+    reference_srs = get_spatial_reference(img_list[0])
+    reproj_inputs_dirs = []
+    for img_path in img_list:
+
+        # get img_path srs
+        srs = get_spatial_reference(img_path)
+        if not reference_srs.IsSame(srs):
+            reproj_img_path = Path(img_path).name
+            reproj_img_path = reproj_img_path.replace(".vrt", "_reprojected.vrt")
+            reproj_img_path = os.path.join(output_dir,'VRTs', reproj_img_path)
+
+            # run the reprojection function
+            reproject_srs(img_path, reproj_img_path, reference_srs)
+            reproj_inputs_dirs.append(reproj_img_path)
+
+        else:
+            reproj_inputs_dirs.append(img_path)
+
+    return reproj_inputs_dirs
+
 def create_subset(input_dirs, output_dir, extent, band):
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
@@ -93,9 +150,9 @@ def create_subset(input_dirs, output_dir, extent, band):
             output_crs=dst_crs)
 
     extent_native_crs = (minX, minY, maxX, maxY)
-
     options = gdal.WarpOptions(format='VRT',
             outputBounds=extent_native_crs)
+
     vrt = gdal.Warp(output_fname, input_dirs, options=options)
 
     vrt = None
@@ -198,7 +255,10 @@ def create_monthly_cogs(ouputs, year, month, S3Paths, product='S2_SR'):
     Create monthly DataCube COGs
     """
     for dataset in outputs:
-         # Get unique filename and check it doesnt exist in tmp_path
+        # Check srs of the time steps in a month
+        output_dir = os.path.join(OUTPUTDIR, 'datacube', product, dataset)
+        outputs[dataset] = check_srs(outputs[dataset], output_dir)
+        # Get unique filename and check it doesnt exist in tmp_path
         f = tempfile.NamedTemporaryFile(mode='w+b', delete=True,
                                         dir='/tmp', suffix=".vrt")
         output_vrt_fname = f.name

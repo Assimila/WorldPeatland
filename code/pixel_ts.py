@@ -1,22 +1,13 @@
-import os
-import subprocess
-from osgeo import gdal
-from osgeo import gdal_array
-from osgeo import osr
-import xarray as xr
-import numpy as np
-from glob import glob
-from datetime import datetime
-
 import sys
-sys.path.append('/workspace/TATSSI/')
+from glob import glob
+
+sys.path.append('/workspace/TATSSI')
+from TATSSI.time_series.smoothing import Smoothing
+
 sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from downloader_wp_test import *
 from gdal_sheep import *
 from save_xarray_to_gtiff_old import *
-
-
-from TATSSI.time_series.smoothing import Smoothing
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -105,7 +96,7 @@ def main(site_directory, value):
     path_components = site_directory.split(os.sep)
     site_name = path_components[-1]
 
-    config = glob.glob(site_directory + f'*_config.yml') 
+    config = glob.glob(site_directory + f'/*_config.yml') 
     config_fname =  config[0]
     start_date, end_date, products = read_config(config_fname)
     
@@ -121,7 +112,6 @@ def main(site_directory, value):
         for _data_var in _data_var_list:
 
             scaling_factor, s, smoothing_method, period = j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period']
-
             pattern = site_directory + f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
             path = glob.glob(pattern)[0] 
             
@@ -150,4 +140,4 @@ if __name__ == "__main__":
         main(site_directory, value)
 
 # example of user input arguments
-# python pixel_ts.py /data/sites/Norfolk True   
+# python pixel_ts.py /wp_data/sites/Norfolk/ True   

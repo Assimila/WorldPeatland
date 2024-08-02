@@ -14,7 +14,7 @@ sys.path.append('/workspace/TATSSI')
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 
 # Sentinel Downloaders
-from SentinelDownloader import *
+from WorldPeatland.code.SentinelDownloader import *
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)

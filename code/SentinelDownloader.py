@@ -12,7 +12,7 @@ import shapely.geometry
 import glob
 import time
 import sys
-from save_xarray_to_gtiff import save_xarray
+from WorldPeatland.code.save_xarray_to_gtiff import save_xarray
 import pandas as pa
 import copy
 
@@ -29,7 +29,7 @@ except:
     from osgeo import gdal
 
 try:
-    from ShapefileToolbox import ShapefileToolbox
+    from WorldPeatland.code.ShapefileToolbox import ShapefileToolbox
 except:
     try:
         os.path.append('../')

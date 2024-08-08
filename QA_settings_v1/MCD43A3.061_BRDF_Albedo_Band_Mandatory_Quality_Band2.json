@@ -1,0 +1,9 @@
+{
+    "MODLAND": [
+        "Processed, good quality (full BRDF inversions)",
+        "Processed, good quality (full BRDF inversions)",
+        "Processed, good quality (full BRDF inversions, only Band 6 is fill value due to non-functional or noisy detectors)",
+        "Processed, good quality (full BRDF inversions, only Band 5 is fill value due to non-functional or noisy detectors)",
+        "Processed, good quality (full BRDF inversions, both Band5 and Band 6 are fill value due to non-functional or noisy detectors)"
+    ]
+}

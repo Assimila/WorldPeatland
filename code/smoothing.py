@@ -1,25 +1,19 @@
-import os
-import subprocess
-from osgeo import gdal
-from osgeo import gdal_array
-from osgeo import osr
-import xarray as xr
-import numpy as np
-from glob import glob
-from datetime import datetime
 
+from glob import glob
+from WorldPeatland.code.downloader_wp_test import *
+from TATSSI.TATSSI.time_series.smoothing import Smoothing
+import logging
 import sys
 sys.path.append('/workspace/TATSSI/')
-sys.path.insert(0,'/workspace/WorldPeatland/code/')
-from downloader_wp_test import *
+sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
-from TATSSI.time_series.smoothing import Smoothing
-
-import logging
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
-'''smoothing.py is the 4th code to run it will apply the smooth factor from the config file to the cleaned and interpolated time series'''
+'''
+smoothing.py is the 4th code to run it will apply the smooth factor from the config 
+file to the cleaned and interpolated time series
+'''
 
 
 # create console handler and set level to debug
@@ -34,6 +28,7 @@ ch.setFormatter(formatter)
 # add ch to logger
 LOG.addHandler(ch)
 
+
 def main(site_directory):
 
     # get the specific config path for this site 
@@ -43,12 +38,11 @@ def main(site_directory):
     path_components = site_directory.split(os.sep)
     site_name = path_components[-1]
 
-
     config = glob.glob(site_directory + f'*_config.yml') 
-    config_fname =  config[0]
+    config_fname = config[0]
     start_date, end_date, products = read_config(config_fname)
 
-    for i , j  in enumerate(products):
+    for i, j in enumerate(products):
 
         product = j['product']
         
@@ -82,7 +76,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 2:
 
-        print("Usage: python script.py <site_directory>") # the user has to input one argument
+        print("Usage: python script.py <site_directory>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         main(site_directory)

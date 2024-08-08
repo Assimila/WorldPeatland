@@ -1,4 +1,4 @@
-from downloader_wp_test import *
+from WorldPeatland.code.downloader_wp_test import *
 import collections
 from TATSSI.TATSSI.notebooks.helpers.qa_analytics import Analytics
 # from TATSSI.notebooks.helpers.utils import *
@@ -17,8 +17,9 @@ then it will INTERPOLATE the cleaned time series
 '''
 
 
-def main(site_directory):
-    qa_path = "/workspace/WorldPeatland/QA_settings/"
+def main(site_directory, QA_settings):
+
+    qa_path = f"/workspace/WorldPeatland/{QA_settings}/"
 
     # get the specific config path for this site 
     # to get the dates and the products
@@ -103,7 +104,7 @@ def main(site_directory):
                     qa_analytics.ts.data[_data_var].attrs
 
                 # create the directory to store QA analytics
-                path_analytics = create_dir(site_directory + 'MODIS/', 'analytics')
+                path_analytics = create_dir(site_directory + 'MODIS/', f'analytics_{QA_settings}')
 
                 print('path_analytics:', path_analytics, 'for variable:', _data_var)
 
@@ -139,13 +140,16 @@ def main(site_directory):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory>")  # the user has to input one argument
+        print("Usage: python script.py <site_directory> <QA_settings>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
+        QA_settings = sys.argv[2]
 
-        main(site_directory)
+        main(site_directory, QA_settings)
+# Choose the QA settings folder that you'd like the strict one is 'QA_settings'
+# while the least restrictive options is 'QA_settings_v1'
 
 # # example of user input arguments
 # python apply_qa.py /data/sites/Norfolk/

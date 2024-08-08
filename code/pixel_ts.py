@@ -1,15 +1,10 @@
-import sys
+
 from glob import glob
 
-sys.path.append('/workspace/TATSSI')
-from TATSSI.time_series.smoothing import Smoothing
+from WorldPeatland.code.downloader_wp_test import *
+from WorldPeatland.code.gdal_sheep import *
+from WorldPeatland.code.save_xarray_to_gtiff_old import *
 
-sys.path.insert(0,'/workspace/WorldPeatland/code/')
-from downloader_wp_test import *
-from gdal_sheep import *
-from save_xarray_to_gtiff_old import *
-
-import logging
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
@@ -17,10 +12,10 @@ LOG.setLevel(logging.DEBUG)
 '''piexl_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
-def pixel_ts(path,site_directory, _data_var, scaling_factor, period, site_name, detrend):
+def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     
-    '''
-    pixel_ts function will open the tatssi geotif linear and smoothened files, it will multiply it
+    """
+    pixel_ts function will open the tatssi geotiff linear and smoothened files, it will multiply it
     by the corresponding scaling factor and then detrend it. detrend is set as true, if you wish 
     to have the pixel data not detrended for zonal statistics or other processing purposes set detrend 
     as false
@@ -32,7 +27,7 @@ def pixel_ts(path,site_directory, _data_var, scaling_factor, period, site_name, 
     OUTPUTS:
         - fname (String) - saved tif file path 
 
-    '''
+    """
     
     # open the tif and extract dataframe
     arr, dts, saved_opn = gdal_dt(path, 'RANGEBEGINNINGDATE')
@@ -63,7 +58,7 @@ def pixel_ts(path,site_directory, _data_var, scaling_factor, period, site_name, 
         output_fname = f"{path_analytics}/{new_fname}"
 
         # detrend ts 
-        trend_ds = ds[_data_var].rolling(time = int(period), min_periods=1,center=True).mean()
+        trend_ds = ds[_data_var].rolling(time=int(period), min_periods=1, center=True).mean()
         ds_output = trend_ds.to_dataset(name=_data_var)
       
     # if ds was not detrended...
@@ -89,15 +84,8 @@ def pixel_ts(path,site_directory, _data_var, scaling_factor, period, site_name, 
 
 def main(site_directory, value):
 
-    # get the specific config path for this site 
-    # to get the dates and the products
-    
-    # get the site name from site_directory
-    path_components = site_directory.split(os.sep)
-    site_name = path_components[-1]
-
     config = glob.glob(site_directory + f'/*_config.yml') 
-    config_fname =  config[0]
+    config_fname = config[0]
     start_date, end_date, products = read_config(config_fname)
     
     for i, j in enumerate(products):
@@ -111,20 +99,23 @@ def main(site_directory, value):
 
         for _data_var in _data_var_list:
 
-            scaling_factor, s, smoothing_method, period = j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period']
-            pattern = site_directory + f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif'
+            scaling_factor, s, smoothing_method, period = (
+                j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period'])
+            pattern = (
+                    site_directory +
+                    f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif')
             path = glob.glob(pattern)[0] 
             
             LOG.info(f'Processing this file {path}')
 
-            pixel_ts(path, site_directory,_data_var, scaling_factor, period, site_name, detrend = value)
+            pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend=value)
 
     
 if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory> <True/False>") # the user has to input two arguments  
+        print("Usage: python script.py <site_directory> <True/False>")  # the user has to input two arguments
     else:
         site_directory = sys.argv[1]
         value = sys.argv[2].lower()

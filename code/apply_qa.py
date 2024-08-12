@@ -132,7 +132,10 @@ def main(site_directory, QA_settings):
                 qa_analytics.selected_data_var = _data_var
                 qa_analytics.selected_interpolation_method = 'linear'
 
-                tsi = TimeSeriesInterpolation(qa_analytics, isNotebook=False)
+                # TODO write for user when and how to change the min_obs_ratio
+                min_obs_ratio = 0.1
+
+                tsi = TimeSeriesInterpolation(qa_analytics, min_obs_ratio=min_obs_ratio, isNotebook=False)
                 tsi.interpolate(progressBar=None)
 
                 LOG.info(f'Data {_data_var} has been interpolated')

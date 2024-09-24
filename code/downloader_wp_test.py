@@ -548,9 +548,10 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: python script.py <geojson_path> <output_dir>")  # the user has to input two arguments
     else:
-        geojson_path = sys.argv[
-            1]  # location of the second item in the list which is the first argument geojson site location
-        output_dir = sys.argv[2]  # location of output downloaded data 3rd item in the list which is the 2nd argument
+        # location of the second item in the list which is the first argument geojson site location
+        geojson_path = sys.argv[1]
+        # location of output downloaded data 3rd item in the list which is the 2nd argument
+        output_dir = sys.argv[2]
         main(geojson_path, output_dir)
 
 # you should be in directory where the script is 

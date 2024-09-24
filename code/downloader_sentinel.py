@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 import json
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 # Sentinel Downloaders
-from SentinelDownloader import *
+from WorldPeatland.code.SentinelDownloader import *
 
 import sys
 sys.path.append('../../TATSSI')
@@ -416,8 +416,8 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                               
     else: 
         LOG.info(f'Starting to download Sentinel data for {site_area}')
-
-        # 1. Call SentinelDownloader class 
+        #
+        # 1. Call SentinelDownloader class
         sd = SentinelDownloader(geojson_path, start_date.date(),
                                 end_date.date(), project=project)
         LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
@@ -427,18 +427,17 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
         sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
         # 1. Call SentinelDownloader class
-        # start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
-        # sd = SentinelDownloader(geojson_path, start_date.date(),
-        #                        end_date.date(), project=project)
-
-        # only download s2 & ACM
+        start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
+        sd = SentinelDownloader(geojson_path, start_date.date(), end_date.date(), project=project)
+        #
+        # # only download s2 & ACM
         # new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)
         # sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
-         
+        #
         # 3. write the files into the datacube structure as tiffs
-        # sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
-        # LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
+        LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
         
     # remove all rawdata after datacube created
     # if os.path.exists(path_sentinel + '/rawdata/'):

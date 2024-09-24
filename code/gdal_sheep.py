@@ -104,7 +104,8 @@ def gdal_stack_dt(lt, time):
             # the time data            
             x = meta[time]
             # also check the metadata to see how is the format of datetime data
-            dt_format = '%Y-%m-%dT%X.000000000'
+            # dt_format = '%Y-%m-%dT%X.000000000'
+            dt_format = '%Y-%m-%d %H:%M:%S'  # '2017-03-05 10:10:21'
             t = dt.strptime(x, dt_format)
             
             # append it to the list
@@ -122,13 +123,15 @@ def gdal_stack_dt(lt, time):
         # for one date and not many dates
         n = arr.ndim 
         if n == 2: 
-            arr = arr[np.newaxis,:,:]
+            arr = arr[np.newaxis, :, :]
             
         # append it to the list
         ARRAYS_RESHAPED.append(arr)
 
-    # concatenate the arrays into one array 
-    stacked_arr = np.concatenate(ARRAYS_RESHAPED, axis=0)
+    if len(ARRAYS_RESHAPED) > 0:
+        stacked_arr = np.concatenate(ARRAYS_RESHAPED, axis=0)
+    else:
+        raise ValueError("No arrays to concatenate in ARRAYS_RESHAPED.")
 
     return stacked_arr, dts, saved_opn
 

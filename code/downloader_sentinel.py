@@ -378,7 +378,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
     
     s2_start_date = datetime.strptime('2017-03-28', '%Y-%m-%d')
     start_date, end_date = check_dates(start_date, end_date, s2_start_date)
-    
+
     if start_date == 0:
         LOG.error(f'Please input dates more than {s2_start_date} to obtain sentinel data')
         return
@@ -408,42 +408,37 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                 new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
-                # only download s2 & ACM
-                # new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)
-                # sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
-                
                 # LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
                               
     else: 
         LOG.info(f'Starting to download Sentinel data for {site_area}')
-        #
-        # 1. Call SentinelDownloader class
-        sd = SentinelDownloader(geojson_path, start_date.date(),
-                                end_date.date(), project=project)
-        LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
+        # Let's loop over each year by itself
+        for year in range(start_date.year, end_date.year + 1):
+            if year == start_date.year:
+                start = start_date  # The first interval starts from the start_date
+            else:
+                start = datetime(year, 1, 1)  # Start from January 1st for subsequent years
+            if year == end_date.year:
+                end = end_date # the last interval ends at end_date
+            else:
+                end = datetime(year, 12, 31)
 
-        # only download s1
-        new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
-        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+            # Call SentinelDownloader class
+            sd = SentinelDownloader(geojson_path, start.date(),
+                                    end.date(), project=project)
+            LOG.info(f'Sentinel data request from {start.date()} to {end.date()}')
 
-        # 1. Call SentinelDownloader class
-        start_date = datetime.strptime('2018-01-01', '%Y-%m-%d')
-        sd = SentinelDownloader(geojson_path, start_date.date(), end_date.date(), project=project)
-        #
-        # # only download s2 & ACM
-        # new_dwn_files = sd.download_raw_s2(path_sentinel +'/rawdata/', manual_key = site_area)
-        # sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
-        #
-        # 3. write the files into the datacube structure as tiffs
-        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+            # only download s1
+            new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
+            sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
-        LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
+            LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
         
-    # remove all rawdata after datacube created
-    # if os.path.exists(path_sentinel + '/rawdata/'):
+            # remove all rawdata after datacube created
+            if os.path.exists(path_sentinel + '/rawdata/'):
         
-        # if the file exist remove it
-        #shutil.rmtree(path_sentinel + '/rawdata/') # rmtree function will delete noob and all files and subdirectories below it
+                # if the file exist remove it
+                shutil.rmtree(path_sentinel + '/rawdata/') # rmtree function will delete noob and all files and subdirectories below it
 
 
 def get_viirs_archive(start_date, country, site_area, site_directory):
@@ -581,7 +576,3 @@ if __name__ == "__main__":
 
 # example in the VM of ESA
 # python downloader_wp_test.py /workspace/Worldpeatland/sites/Norfolk.geojson /data/sites
-
-# example
-# python downloader_wp_test.py /data/world_peatlands/src/WorldPeatland/sites/Norfolk.geojson
-# /data/world_peatlands/demo/dry_run/

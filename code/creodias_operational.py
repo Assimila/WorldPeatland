@@ -357,7 +357,7 @@ def main(geojson_fname, OUTPUT_DIR):
     cloud_cover_le = 30
 
     #OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL2A'
-    OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL2A_test')
+    OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL2A')
     create_dir(OUTPUTDIR)
 
     # Create a file to store the sensing dates pickle files
@@ -384,7 +384,7 @@ def main(geojson_fname, OUTPUT_DIR):
                f"eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
                f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
-    for year in range(2017, 2024 + 1):
+    for year in range(2017, 2023 + 1):
         for month in range(1, 12 + 1):
             start_date = f'{year}-{month:02}-01T00:00:00.000Z'
             end_day = monthrange(year, month)[1]

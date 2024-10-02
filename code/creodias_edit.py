@@ -98,28 +98,35 @@ def get_metadata_path(time, S3Paths):
 
 def add_mtd(OUTPUTDIR, year, month, S3Paths):
 
-    # dataset geotiff path
+    # dataset geotiff path set to B02 only for now
     monthly_cog_dir = os.path.join(OUTPUTDIR, f'datacube/S2_SR/B02/S2_SR_B02_{year}-{month:02}.tif')
     ds = gdal.Open(monthly_cog_dir, gdal.GA_Update)
-    for i in range(ds.RasterCount):
-        # Raster band starts with 1 and not 0
-        rb = ds.GetRasterBand(i+1)
-        mtd = rb.GetMetadata()
-        # get time component of the band
-        basename = os.path.basename(S3Paths[i]) # list count starts with 0
-        time = basename.split('_')[2]
-        # get metadata, need the time aspect
-        metadata = get_metadata_path(time, S3Paths)
-        sza, saa, vza, vaa = get_angle(metadata)
+    if ds is None:
+        print(f"Error: Unable to open the dataset for {monthly_cog_dir}.")
+    else:
+        # Check if the dataset contains any raster bands
+        if ds.RasterCount == 0:
+            print(f"Error: No raster bands found in the dataset for {monthly_cog_dir}.")
+        else:
+            for i in range(ds.RasterCount):
+                # Raster band starts with 1 and not 0
+                rb = ds.GetRasterBand(i+1)
+                mtd = rb.GetMetadata()
+                # get time component of the band
+                basename = os.path.basename(S3Paths[i]) # list count starts with 0
+                time = basename.split('_')[2]
+                # get metadata, need the time aspect
+                metadata = get_metadata_path(time, S3Paths)
+                sza, saa, vza, vaa = get_angle(metadata)
 
-        # Add to mtd current dictionary the angular information
-        mtd['sza'] = sza
-        mtd['saa'] = saa
-        mtd['vza'] = vza
-        mtd['vaa'] = vaa
+                # Add to mtd current dictionary the angular information
+                mtd['sza'] = sza
+                mtd['saa'] = saa
+                mtd['vza'] = vza
+                mtd['vaa'] = vaa
 
-        # Update the band metadata with the new angles
-        rb.SetMetadata(mtd)
+                # Update the band metadata with the new angles
+                rb.SetMetadata(mtd)
 
 
 # =======================================================================#
@@ -137,7 +144,7 @@ def main(geojson_fname, OUTPUT_DIR):
     cloud_cover_le = 30
 
     # OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL2A'
-    OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL2A_test')
+    OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL2A')
     create_dir(OUTPUTDIR)
 
     # Create a file to store the sensing dates pickle files
@@ -177,7 +184,7 @@ def main(geojson_fname, OUTPUT_DIR):
             # Encode URL
             url_encoded = requote_uri(url)
 
-            # Remove unnecessasary characters from encoded URL
+            # Remove unnecessary characters from encoded URL
             url_encoded_cleared = url_encoded.replace('%0A', '')
             # Obtain and print the response
             response = requests.get(url_encoded_cleared)

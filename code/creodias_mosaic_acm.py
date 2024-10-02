@@ -466,11 +466,11 @@ datasets = ['B01', 'B02', 'B04', 'B05', 'B08',
             'B8A', 'B09', 'B10', 'B11', 'B12']
 
 cloud_cover_le = 30
-OUTPUT_DIR = '/wp_data/sites/Degero/Sentinel'
-OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL1C_test')
+OUTPUT_DIR = '/wp_data/sites/CongoNorth/Sentinel'
+OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL1C')
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/CongoNorth.geojson'
 extent = get_extent(geojson_fname)
 polygon = get_polygon(geojson_fname)
 
@@ -498,6 +498,21 @@ url_end = (f"(Online eq true) and "
            f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27)))))))))&$expand=Attributes"
            f"&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20")
 
+url_end_2 = (
+    f"(Online eq true) and "
+    f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
+    f"{polygon}"
+    f"))%27)) and "
+    f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20(((Attributes/OData.CSC.StringAttribute/any("
+    f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27A%27))%20or%20("
+    f"Attributes/OData.CSC.StringAttribute/any("
+    f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27B%27))))%20and%20((("
+    f"Attributes/OData.CSC.StringAttribute/any("
+    f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI1C%27)))))))))&$expand=Attributes"
+    f"&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+)
+
+
 # Get a list of all the sensing dates pickle files downloaded for the SR L2A data product
 pkl_flist = sorted(glob(OUTPUT_DIR + f'/sensing_dates/*.pkl'))
 
@@ -523,8 +538,6 @@ for pkl in pkl_flist:
 
     year, month = get_year_month(pkl)
 
-# for year in range(2017, 2024 + 1):
-#     for month in range(1, 12 + 1):
     start_date = f'{year}-{month:02}-01T00:00:00.000Z'
     end_day = monthrange(year, month)[1]
     end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
@@ -562,6 +575,45 @@ for pkl in pkl_flist:
                 print()
         else:
             continue
+    # since this is based on the pickle files, if a pickle file is there meaning SR data is available
+    # check if S3Paths are empty meaning the TOA image is not available in collection 1 N0500
+    # thus, the need to get an image from any other previous collection with the same date.
+    if not S3Paths:
+        # create url without asking for collection 1
+        url = (f"{url_start}"
+               f"(ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
+               f"{url_end_2}")
+
+        # Encode URL
+        url_encoded = requote_uri(url)
+
+        # Remove unnecessasary characters from encoded URL
+        url_encoded_cleared = url_encoded.replace('%0A', '')
+        # Obtain and print the response
+        response = requests.get(url_encoded_cleared)
+        response = response.json()
+        S3Paths = []
+        for i, element in enumerate(response['value']):
+
+            # Get acquisition date first date in the S3Path file name
+            image_name = os.path.basename(element['S3Path'])
+            sensing_date = image_name.split('_')[2]
+
+            # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR L2A
+            if sensing_date in sensing_dates_list:
+
+                S3Paths.append(element['S3Path'])
+
+                new_dir = os.path.join(OUTPUTDIR, image_name)
+                try:
+                    os.symlink(element['S3Path'], new_dir, target_is_directory=True)
+
+                except FileExistsError:
+                    print(f"{element['S3Path']} already exists")
+                    print()
+            else:
+                continue
+
 
 
     # Create daily VRTs

@@ -10,7 +10,7 @@ geojson.sort()
 
 for path in geojson:
 
-    cmd = f'python downloader_wp_test.py {path} /data/sites'
+    cmd = f'python downloader_sentinel.py {path} /data/sites'
 
     print(f'Running cmd: {cmd}')
 

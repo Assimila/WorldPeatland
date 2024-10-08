@@ -413,6 +413,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
     else: 
         LOG.info(f'Starting to download Sentinel data for {site_area}')
         # Let's loop over each year by itself
+        start_date = datetime(2019, 1, 1, 0, 0)
         for year in range(start_date.year, end_date.year + 1):
             if year == start_date.year:
                 start = start_date  # The first interval starts from the start_date
@@ -429,6 +430,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
             LOG.info(f'Sentinel data request from {start.date()} to {end.date()}')
 
             # only download s1
+            print(geojson_path)
             new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
             sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
@@ -514,8 +516,9 @@ def main(geojson_path, output_dir):
     # Create a site specific directory   
     site_directory = create_dir(output_dir, site_area)  # output_dir set by user
     
-    # Read MODIS tiles KML as layer 
+    # Read MODIS tiles KML as layer
     fname = '../modis_tiles/modis_sin.kml'
+    # fname = '/workspace/WorldPeatland/modis_tiles/modis_sin.kml'
     driver = ogr.GetDriverByName('KML')
     src_kml = driver.Open(fname)
     tiles_layer = src_kml.GetLayer()
@@ -531,6 +534,7 @@ def main(geojson_path, output_dir):
     
     # create a copy of the template config file 
     config_src = './template_config.yml'
+    # config_src = '/workspace/WorldPeatland/code/template_config.yml'
     dst_config = site_directory + f'/{site_area}_config.yml'
     
     shutil.copyfile(config_src, dst_config)
@@ -574,5 +578,10 @@ if __name__ == "__main__":
 # you should be in directory where the script is 
 # if you want to change the dates of downloads you should access the template config and change the dates in it
 
-# example in the VM of ESA
+# example in the VM of ESA in the /workspace/WorldPeatland/code directory
 # python downloader_wp_test.py /workspace/Worldpeatland/sites/Norfolk.geojson /data/sites
+
+# in ESA VM in the /workspace directory
+# nohup python -m WorldPeatland.code.downloader_sentinel WorldPeatland/sites/MoorHouse.geojson /wp_data/sites
+# > logs/MoorHouse_s1_GEE_20240210.log &
+

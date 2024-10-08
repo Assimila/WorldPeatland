@@ -204,7 +204,7 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
     OUTPUTS:
         - a gdal dataset. to access the data use ReadAsArray()
     """
- 
+
     # get the details of the source image
     if type(source_img) == str:
         s = gdal.Open(source_img)
@@ -240,7 +240,7 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
         if clip_shapefile is not None:
             g = gdal.Warp('', source_img, format='MEM',
                     cutlineDSName=clip_shapefile,
-                    cropToCutline=True,dstNodata = no_data_val)
+                    cropToCutline=True, dstNodata=no_data_val)
         else:
             g = gdal.Open(source_img)
  
@@ -254,10 +254,44 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
             g = gdal.Warp('', source_img, format='MEM',
                       outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
                       dstSRS=dstSRS, cutlineDSName=clip_shapefile,
-                    cropToCutline=True,dstNodata = no_data_val)
+                    cropToCutline=True, dstNodata=no_data_val)
  
         else:
             g = gdal.Warp('', source_img, format='MEM',
                       outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
                       dstSRS=dstSRS)
-    return g       
+    return g
+
+
+def save_3d_masks(in_arr, gdalobj, save_name):
+    """
+    Alex's function
+
+    INPUTS
+        - in_arr (numpy array) - 3d arrray with the data to be saved in tif
+        - gdalobj - of one image that has the same coordinate system & ...
+        - save_name (string) - path with tif filename
+    """
+    dtype_non_gdal = in_arr.dtype
+    if dtype_non_gdal == 'bool':
+        dtype = gdal.GDT_Byte
+    else:
+        dtype = gdal_array.NumericTypeCodeToGDALTypeCode(dtype_non_gdal)
+    cols = in_arr.shape[2]
+    rows = in_arr.shape[1]
+    lyrcount = in_arr.shape[0]
+    driver = gdal.GetDriverByName('GTiff')
+    driver_options = ['COMPRESS=DEFLATE',
+                      'BIGTIFF=YES',
+                      'PREDICTOR=1',
+                      'TILED=YES',
+                      'COPY_SRC_OVERVIEWS=YES']
+
+    outRaster = driver.Create(save_name, cols, rows, lyrcount, dtype, driver_options)
+    outRaster.SetGeoTransform(gdalobj.GetGeoTransform())
+    for n, i in enumerate(in_arr):
+        outband = outRaster.GetRasterBand(n + 1)
+        outband.WriteArray(i)
+
+    outRaster.SetProjection(gdalobj.GetProjection())
+    outband.FlushCache()

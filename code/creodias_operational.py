@@ -350,10 +350,11 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
 
 
 def main(geojson_fname, OUTPUT_DIR):
-    datasets = {'R10m': ['B02', 'B03', 'B04', 'B08'],
-                'R20m': ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
-                'R60m': ['B01'],
-                'QI_DATA': ['MSK_CLDPRB_20m']}
+    # datasets = {'R10m': ['B02', 'B03', 'B04', 'B08'],
+    #             'R20m': ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
+    #             'R60m': ['B01', 'SCL'],
+    #             'QI_DATA': ['MSK_CLDPRB_20m']}
+    datasets = {'R60m': ['SCL']}
     cloud_cover_le = 30
 
     #OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL2A'
@@ -397,7 +398,7 @@ def main(geojson_fname, OUTPUT_DIR):
             # Encode URL
             url_encoded = requote_uri(url)
 
-            # Remove unnecessasary characters from encoded URL
+            # Remove unnecessary characters from encoded URL
             url_encoded_cleared = url_encoded.replace('%0A', '')
             # Obtain and print the response
             response = requests.get(url_encoded_cleared)
@@ -452,5 +453,6 @@ if __name__ == "__main__":
         geojson_fname = sys.argv[1]
         OUTPUT_DIR = sys.argv[2]
         main(geojson_fname, OUTPUT_DIR)
+
 #geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
 #OUTPUT_DIR = '/wp_data/sites/Degero/Sentinel'

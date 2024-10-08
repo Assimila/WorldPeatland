@@ -1,6 +1,5 @@
 from osgeo import gdal, osr
 from osgeo import gdal_array
-import numpy
 
 def get_dst_dataset(dst_img, cols, rows, layers, dtype, proj, gt):
     """

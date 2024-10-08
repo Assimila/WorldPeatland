@@ -107,3 +107,11 @@ Traceback (most recent call last):
   File "/python/anaconda3/envs/worldpeatland/lib/python3.10/glob.py", line 149, in _iterdir
     if not dironly or entry.is_dir():
 KeyboardInterrupt
+Traceback (most recent call last):
+  File "/workspace/WorldPeatland/code/downloader_sentinel.py", line 10, in <module>
+    from TATSSI.TATSSI.download.modis_downloader import get_modis_data
+ModuleNotFoundError: No module named 'TATSSI'
+Traceback (most recent call last):
+  File "/workspace/WorldPeatland/code/downloader_sentinel.py", line 10, in <module>
+    from TATSSI.TATSSI.download.modis_downloader import get_modis_data
+ModuleNotFoundError: No module named 'TATSSI'

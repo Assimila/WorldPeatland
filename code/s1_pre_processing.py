@@ -1,13 +1,5 @@
-from osgeo import gdal, osr
-import numpy as np
-import xarray as xr
-import glob
-import yaml
-import logging
-import os
-from pathlib import Path
-from datetime import datetime as dt
 
+import logging
 import sys
 sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from save_xarray_to_gtiff_old import *

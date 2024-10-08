@@ -466,11 +466,11 @@ datasets = ['B01', 'B02', 'B04', 'B05', 'B08',
             'B8A', 'B09', 'B10', 'B11', 'B12']
 
 cloud_cover_le = 30
-OUTPUT_DIR = '/wp_data/sites/CongoNorth/Sentinel'
+OUTPUT_DIR = '/wp_data/sites/Norfolk/Sentinel'
 OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL1C')
 create_dir(OUTPUTDIR)
 
-geojson_fname = '/workspace/WorldPeatland/sites/CongoNorth.geojson'
+geojson_fname = '/workspace/WorldPeatland/sites/Norfolk.geojson'
 extent = get_extent(geojson_fname)
 polygon = get_polygon(geojson_fname)
 

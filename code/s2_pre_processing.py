@@ -1,4 +1,6 @@
 import os.path
+
+import numpy as np
 import yaml
 import logging
 import subprocess
@@ -240,8 +242,8 @@ def get_bands_SR_in_arrays(bd, tif, opn, month_tif, input_dict):
     # g is a gdal.dataset, pick the same raster band number in the loop
     rb_g = g.GetRasterBand(bd)
     arr_g = rb_g.ReadAsArray()
-    SR_BD_SCALE = 0.0001
-    input_dict[f'{band_name}'] = (arr_g * SR_BD_SCALE).astype(np.float32)
+    SR_BD_SCALE = 10000
+    input_dict[f'{band_name}'] = (arr_g / SR_BD_SCALE).astype(np.float32)
 
     return input_dict
 
@@ -258,8 +260,8 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
     # Read the band 2d array
     arr = rb.ReadAsArray()
     # multiply by scaling factor
-    SR_BD_SCALE = 0.0001
-    arr = (arr * SR_BD_SCALE).astype(np.float32)
+    SR_BD_SCALE = 10000
+    arr = (arr / SR_BD_SCALE).astype(np.float32)
     # create a dictionary where you will append all the 2d arrays needed as inputs for MLEONN
     input_dict = {'B02': arr}
     # Now loop over all other bands
@@ -444,19 +446,38 @@ def main(S2_path):
         # Get the SCL corresponding month tif
         search_pattern = os.path.join(S2_path, '**', 'SCL', f'*{timestep}*.tif')
         SCL_path = glob.glob(search_pattern, recursive=True)[0]
-        SCL_arr, dts, saved_opn = gdal_dt(SCL_path, 'time')
+        # regrid SCL to B2 10m pixel resolution
+        SCL_gdalobj = reproject_image(SCL_path, month_tif)
+        SCL_arr = SCL_gdalobj.ReadAsArray()
+
+
+
+
         # water class is 6 in SCL
         water_class = 6
         # if the pixel is water(=6) set the pixel as 1 (True)
         # if pixel not water then it is 0
         not_water = np.where(SCL_arr == water_class, 1, 0)
 
-        # Set Dark pixels
+        # Set Potential Dark pixels
         # Get B8_arr already previously descaled corresponding month tif (NIR)
-        # NIR dark pixel reflectance threshold is set to 0.15 needs to be multiplied by scaling factor
-        SR_BD_SCALE = 0.0001
+        # NIR dark pixel reflectance threshold is set to 0.15 already descaled
         nir_drk_thresh = 0.15
-        dark_pixels = (B8_arr < (nir_drk_thresh * SR_BD_SCALE)) * not_water
+        # 1 is a potentially dark pixel and 0 otherwise
+        #TODO is this correct? NIR reflectance of less than the threshold is dark pixel?
+        dark_pixels = np.where(B8_arr < nir_drk_thresh, 1, 0)
+        # set water pixel to 0 in dark_pixels
+        dark_pixels = np.where(not_water == 1, 0, dark_pixels)
+        # Now dark_pixels contains 1 for potentially dark pixels (excluding water) and 0 otherwise
+
+        # Determine the direction to project cloud shadow from clouds (assumes UTM projection)
+        shadow_azimuth = 90 - saa_arr
+        # Ensure the values are in the range of 0° to 360°
+        #TODO should this be done to avoid negative values?
+        shadow_azimuth = np.mod(shadow_azimuth, 360)
+
+
+
 
 
 

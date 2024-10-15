@@ -152,7 +152,7 @@ def create_xarr(opn, var_name, arr, dts):
     # GetGeotransform gets me the corner coordinates of the tiff 
     # i.e. (564550.0, 10.0, 0.0, 5931390.0, 0.0, -10.0)
     params = opn.GetGeoTransform()  # params is a tuple 
-    xs = np.array([params[0]+(params[1]*i) + (params[1]/2)  for i in np.arange(opn.RasterXSize)])
+    xs = np.array([params[0]+(params[1]*i) + (params[1]/2) for i in np.arange(opn.RasterXSize)])
     # params[0] is the top left point x/lon coordinate value
     # prams[1] is the length along the x axis of 1 pixel
     # RasterXSize is the total number of pixels along the x-axis (later it would be the size of the whole tiff of xarray)

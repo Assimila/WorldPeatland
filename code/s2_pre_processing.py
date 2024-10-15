@@ -1,6 +1,5 @@
 import os.path
 
-import numpy as np
 import yaml
 import logging
 import subprocess
@@ -284,6 +283,9 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
     saa = np.float32(mtd['saa'])
     sza = np.float32(mtd['sza'])
 
+    # add the angular information into a dictionary
+    angular_dict = {'vaa': vaa, 'vza': vza, 'saa': saa, 'sza': sza}
+
     # form a numpy array for each angle same shape as the B02 reflectance array
     vaa = np.full(arr.shape, vaa)
     vza = np.full(arr.shape, vza)
@@ -304,7 +306,6 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
 
     # Export the one timestep (one 2d array) of B8 and saa needed in for the dark pixels selection
     B8_arr = input_dict['B8']
-    saa_arr = input_dict['saa']
 
     # Empty the input_dict
     input_dict = None
@@ -315,7 +316,7 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
     MLEONN_products_dict['fc'].append(fc)
     MLEONN_products_dict['cab'].append(cab)
 
-    return MLEONN_products_dict, B8_arr, saa_arr
+    return MLEONN_products_dict, B8_arr, angular_dict
 def create_monthly_cogs(product, S2_path, timestep, opn, dts, month_tif, MLEONN_products_dict):
     """
     Create cog monthly tiffs for the MLEONN products created
@@ -356,14 +357,12 @@ def create_monthly_cogs(product, S2_path, timestep, opn, dts, month_tif, MLEONN_
 
 
 def main(S2_path):
-    
-    # tile_name, _ = get_file_name(geojson_path)
 
     # Path to B02 datacube tiff files
     B02_path = os.path.join(S2_path, 'B2')
 
     # get B02 monthly tif files
-    B02_tif_files_list= glob.glob(os.path.join(B02_path, '*.tif'))
+    B02_tif_files_list = glob.glob(os.path.join(B02_path, '*.tif'))
 
     # Set reflectance bands list
     bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11', 'B12']
@@ -397,19 +396,18 @@ def main(S2_path):
         dts = []
         # Create an empty list to append the in month single days of B8 and saa
         B8_list = []
-        saa_list = []
+        angular_list = []
 
         # Now loop over each timestep in this month, loop over each raster in the tif
         # in this case bd as band meaning a 2d raster or one timestep and not reflectance bands
         for bd in range(opn.RasterCount):
             bd += 1  # gdal starts raster band count from 1
             ######### PREPARE INPUT BAND SR AND RUN MLEONN ###############
-            MLEONN_products_dict, B8_arr, saa_arr = prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_products_dict)
+            MLEONN_products_dict, B8_arr, angular_dict = prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_products_dict)
             B8_list.append(B8_arr)
-            saa_list.append(saa_arr)
+            angular_list.append(angular_dict)
         # this is descaled B8 array
         B8_arr = np.stack(B8_list, axis=0)
-        saa_arr = np.stack(saa_list, axis=0)
 
         # empty dictionary  to store outputs file names
         outputs = {}
@@ -438,7 +436,7 @@ def main(S2_path):
         cld_prb_thresh = 0.5
         # apply the mask 1 for cprob >= 0.5 not cloudy is set as 0
         # pixel is cloud == 1
-        is_cloud = np.where(cprob_arr >= cld_prb_thresh, 1, 0)
+        is_clouds = np.where(cprob_arr >= cld_prb_thresh, 1, 0)
 
         ########## Shadow bands ##########
 
@@ -449,9 +447,6 @@ def main(S2_path):
         # regrid SCL to B2 10m pixel resolution
         SCL_gdalobj = reproject_image(SCL_path, month_tif)
         SCL_arr = SCL_gdalobj.ReadAsArray()
-
-
-
 
         # water class is 6 in SCL
         water_class = 6
@@ -467,9 +462,17 @@ def main(S2_path):
         #TODO is this correct? NIR reflectance of less than the threshold is dark pixel?
         dark_pixels = np.where(B8_arr < nir_drk_thresh, 1, 0)
         # set water pixel to 0 in dark_pixels
-        dark_pixels = np.where(not_water == 1, 0, dark_pixels)
+        # dark_pixels = np.where(not_water == 1, 0, dark_pixels)
         # Now dark_pixels contains 1 for potentially dark pixels (excluding water) and 0 otherwise
 
+        # Create the saa_arr from the list of angular_dict
+        saa_arr = []
+        for ang_dict in angular_list:
+            saa_value = ang_dict['saa']
+            saa_array = np.full(B8_arr[0].shape, saa_value)
+            saa_arr.append(saa_array)
+
+        saa_arr = np.array(saa_arr)
         # Determine the direction to project cloud shadow from clouds (assumes UTM projection)
         shadow_azimuth = 90 - saa_arr
         # Ensure the values are in the range of 0° to 360°
@@ -477,25 +480,70 @@ def main(S2_path):
         shadow_azimuth = np.mod(shadow_azimuth, 360)
 
 
+        # def project_cloud_mask(opn, bd, angular_list, is_clouds, elevation):
+        #     """
+        #     Projects the cloud mask to the ground level assuming some cloud height and using the sun and view angles.
+        #     Reference code:
+        #     https://github.com/sentinel-hub/eo-learn-examples/blob/main/AgriDataValue/cloud-shadows-projection/utils.py
+        #
+        #     INPUTS
+        #     - opn (gdal object) - containing the xres and yres of the Sentinel-2 (best to take the reference img B02)
 
+        #
+        #     OUTPUTS
+        #
+        #     """
 
+        # Get image resolution height and width of a pixel
+        geo = opn.GetGeoTransform()
+        # number of rows and cols
+        # width is the number of cols along the xaxis
+        # and height is the number of rows along the yaxis
+        width, height = opn.RasterXSize, opn.RasterYSize
+        xmin = min(geo[0], geo[0] + width * geo[1])
+        ymax = max(geo[3], geo[3] + height * geo[5])
+        xRes, yRes = abs(geo[1]), abs(geo[5])
 
+        for t_idx in range(opn.RasterCount):
+            # Average Solar and Viewing angles from Degrees to Radians
+            sZ = angular_list[t_idx]['sza'] * np.pi / 180
+            sA = angular_list[t_idx]['saa'] * np.pi / 180
+            vZ = angular_list[t_idx]['vza'] * np.pi / 180
+            vA = angular_list[t_idx]['vaa'] * np.pi / 180
 
+            # Get the indices of the pixels where clouds are present and convert them to CRS coordinates. If only the
+            # condition is provided, numpy.where() will return the indices of elements where the condition is true.
+            rows_c, cols_c = np.where(is_clouds[t_idx])
+            xc = xmin + (cols_c * xRes)  # xmin of bottom left
+            yc = ymax - (rows_c * yRes)  # ymax of top right
 
+            elevation = 500
+            # project the cloud mask to the ground level in CRS coordinates
+            xs = xc - elevation * (-np.tan(vZ) * np.sin(vA) + np.tan(sZ) * np.sin(sA))
+            ys = yc - elevation * (np.tan(vZ) * np.cos(vA) + np.tan(sZ) * np.cos(sA))
 
+            # Filter out NaN values
+            #TODO why we need this ? does it work?
+            # nan_mask = np.isnan(xs) | np.isnan(ys)  # in xs or ys
+            # xc, yc, xs, ys = [array[~nan_mask] for array in [xc, yc, xs, ys]]
 
+            # convert the CRS coordinates back to pixel indices
+            # cols_s = (np.round(xs - xmin, decimals=-1) / xRes).astype(int)
+            # rows_s = (np.round(ymax - ys, decimals=-1) / yRes).astype(int)
+            cols_s = ((xs - xmin) / xRes).astype(int)
+            rows_s = ((ymax - ys) / yRes).astype(int)
 
+            # filter out-of-bounds values
+            out_of_bounds = (cols_s < 0) | (cols_s >= width) | (rows_s < 0) | (rows_s >= height)
+            cols_s = cols_s[~out_of_bounds]
+            rows_s = rows_s[~out_of_bounds]
 
+            # create the cloud shadow mask
+            shadow_mask = np.zeros_like(is_clouds[t_idx])
+            shadow_mask[(rows_s, cols_s)] = 1
 
-
-
-
-
-
-
-
-
-
+            shadow_mask_3d = shadow_mask.reshape((1, height, width))
+            save_3d_masks(shadow_mask_3d, opn, F'/wp_data/sites/Degero/Sentinel/test/degero_shadow_mask_{elevation}_2018-03.tif')
 
 
 

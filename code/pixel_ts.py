@@ -12,6 +12,56 @@ LOG.setLevel(logging.DEBUG)
 '''piexl_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
+def gdal_dt(e, time):
+    '''
+    gdal_dt function will open the tif file as an osegeo gdal dataset
+
+    INPUTS:
+        - e (str or tiff) - path the tiff file or the gdal dataset you want to
+            open and save its datetimes
+        - time (string) - check how the time variable is written in the tiff metadata
+    Outputs:
+        - arr (np.array) - return arr of the gdal dataset
+        - dts (list) - list of the datetimes
+        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
+    '''
+
+    # Create an empty list to store the datatimes
+    dts = []
+
+    # Check if the input is a str which would be the tif file
+    # otherwise it is already an opened gdal dataset
+    if type(e) == str:
+        # open the Dataset
+        opn = gdal.Open(e)
+    else:
+        opn = e
+
+    for i in range(1, opn.RasterCount + 1):
+        rst = opn.GetRasterBand(i)
+        meta = rst.GetMetadata()
+
+        # following fill in with the corresponding format
+        # 'time' check the metadata of the tiff to see what they call
+        # could also be 'RANGEBEGINNINGDATE'
+        # the time data
+        x = meta[time]
+        # also check the metadata to see how is the format of datetime data
+        dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
+        t = dt.strptime(x, dt_format)
+
+        # append it to the list
+        dts.append(t)
+
+    # save the last osegeodataset for its srs
+    saved_opn = opn
+
+    # open the array
+    arr = opn.ReadAsArray()
+
+    return arr, dts, saved_opn
+
+
 def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     
     """

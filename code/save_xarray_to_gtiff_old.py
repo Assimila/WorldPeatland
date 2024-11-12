@@ -191,6 +191,11 @@ def save_tiff(fname, xarray, data_var):
             dst_band.SetMetadataItem('time',
                     _xarray.time.data[layer].astype(str))
 
+        # dayofyear
+        if 'dayofyear' in _xarray.dims:
+            dst_band.SetMetadataItem('dayofyear',
+                                     _xarray.dayofyear.data[layer].astype(str))
+
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
 

@@ -350,11 +350,11 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
 
 
 def main(geojson_fname, OUTPUT_DIR):
-    # datasets = {'R10m': ['B02', 'B03', 'B04', 'B08'],
-    #             'R20m': ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
-    #             'R60m': ['B01', 'SCL'],
-    #             'QI_DATA': ['MSK_CLDPRB_20m']}
-    datasets = {'R60m': ['SCL']}
+    datasets = {'R10m': ['B02', 'B03', 'B04', 'B08'],
+                'R20m': ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
+                'R60m': ['B01', 'SCL'],
+                'QI_DATA': ['MSK_CLDPRB_20m']}
+
     cloud_cover_le = 30
 
     #OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL2A'

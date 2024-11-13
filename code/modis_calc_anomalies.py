@@ -137,9 +137,17 @@ def main(ts_path, output_dir):
             ds_year = ds.sel(time=_time)  # ds_year type is xarr dataset
 
             # Anomalies for full year only
-            if not len(ds_year.time) == n_time_steps:
-                continue
-            anomalies_year = (ds_year - ds_mean[var_name].data) / ds_std[var_name].data
+            # if not len(ds_year.time) == n_time_steps:
+            #     continue
+
+            # assign dayofyear coordinates to ds_year
+            ds_year = ds_year.assign_coords(dayofyear=ds_year.time.dt.dayofyear)
+
+            # select the corresponding doy for mean and std
+            ds_mean_sel = ds_mean.sel(dayofyear=ds_year.dayofyear)
+            ds_std_sel = ds_std.sel(dayofyear=ds_year.dayofyear)
+
+            anomalies_year = (ds_year - ds_mean_sel[var_name].data) / ds_std_sel[var_name].data
             anomalies_list.append(anomalies_year)
 
         ds_anomalies_all_years = xr.concat(anomalies_list, dim='time')

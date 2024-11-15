@@ -136,10 +136,6 @@ def main(ts_path, output_dir):
             # Get time series for year (np.int64)
             ds_year = ds.sel(time=_time)  # ds_year type is xarr dataset
 
-            # Anomalies for full year only
-            # if not len(ds_year.time) == n_time_steps:
-            #     continue
-
             # assign dayofyear coordinates to ds_year
             ds_year = ds_year.assign_coords(dayofyear=ds_year.time.dt.dayofyear)
 

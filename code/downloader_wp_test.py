@@ -195,15 +195,31 @@ def get_modis_timestep(path, start_date, end_date, format_tiles):
     n_threads = 6
     _username, _password = read_config_cred()
 
-    delta = timedelta(days=8)
+    # Create the list of doy for which to order the image
+    interval = 8
+    doy_list = list(range(1, 365 + 1, interval))
 
-    # Initialize a list with the first date also as datetime
-    l = [start_date]
-    while start_date <= end_date:
-        start_date += delta
-        l.append(start_date)
+    # Initialize the list with the start date
+    date_list = [start_date]
+
+    # Go through dates from start_date to end_date, checking for DOY matches
+    current_date = start_date
+    while current_date <= end_date:
+        # Get the DOY of the current date
+        doy = current_date.timetuple().tm_yday
+
+        # If the DOY is in our interval list, add it to date_list
+        if doy in doy_list:
+            date_list.append(current_date)
+
+        # Move to the next day
+        current_date += timedelta(days=1)
+
+    # Remove the duplicate start date if it's added
+    date_list = list(dict.fromkeys(date_list))
+
     # Get the data
-    for t in l:
+    for t in date_list:
         print(t)
         get_modis_data('MOTA', 'MCD43A3.061', format_tiles,
                        path, t,
@@ -256,7 +272,7 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
 
                 try:
-                    #create link to the site modis tile related data
+                    # create link to the site modis tile related data
                     err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
 
                     if err_msg:
@@ -272,8 +288,7 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
 
                 # Set the date strings as datetime.datetime so that get_modis_data works 
                 get_modis_data(products[i]['platform'], products[i]['product'], tile,
-                               path_tile,
-                               start_date, end_date, n_threads, _username, _password)
+                               path_tile, start_date, end_date, n_threads, _username, _password)
 
                 # where the data will be linked, this is in the site specific modis file 
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
@@ -455,7 +470,9 @@ def read_config_cred():
     Read downloaders config file
     """
 
+    path_downloader = os.path.abspath(__file__)
     fname = './config_cred.json'
+    fname = os.path.normpath(os.path.join(os.path.dirname(path_downloader), fname))
     with open(fname) as f:
         credentials = json.load(f)
 
@@ -466,14 +483,14 @@ def read_config_cred():
 
 
 def main(geojson_path, output_dir):
-    '''
-    
+    """
+
     INPUTs:
-    - geojson_path is the path of the json site it needs to contain at least name of the site 
+    - geojson_path is the path of the json site it needs to contain at least name of the site
     and country where the site is located
-    - output_dir where the user wants to the data to be downloaded 
-    
-    '''
+    - output_dir where the user wants to the data to be downloaded
+
+    """
 
     # check if GeoJson file exists    
     if not os.path.isfile(geojson_path):
@@ -498,8 +515,11 @@ def main(geojson_path, output_dir):
     # Create a site specific directory   
     site_directory = create_dir(output_dir, site_area)  # output_dir set by user
 
-    # Read MODIS tiles KML as layer 
+    # Read MODIS tiles KML as layer
+    path_downloader = os.path.abspath(__file__)
     fname = '../modis_tiles/modis_sin.kml'
+    fname = os.path.normpath(os.path.join(os.path.dirname(path_downloader), fname))
+
     driver = ogr.GetDriverByName('KML')
     src_kml = driver.Open(fname)
     tiles_layer = src_kml.GetLayer()
@@ -513,8 +533,9 @@ def main(geojson_path, output_dir):
         print(j)
         format_tiles.append(j)
 
-    # create a copy of the template config file 
+    # create a copy of the template config file
     config_src = './template_config.yml'
+    config_src = os.path.normpath(os.path.join(os.path.dirname(path_downloader), config_src))
     dst_config = site_directory + f'/{site_area}_config.yml'
 
     shutil.copyfile(config_src, dst_config)
@@ -555,10 +576,11 @@ if __name__ == "__main__":
         output_dir = sys.argv[2]
         main(geojson_path, output_dir)
 
+
 # you should be in directory where the script is 
 # if you want to change the dates of downloads you should access the template config and change the dates in it
 
 # example in the VM of ESA
-# python downloader_wp_test.py /workspace/Worldpeatland/sites/Norfolk.geojson /data/sites
+# python downloader_wp_test.py /workspace/WorldPeatland/sites/Norfolk.geojson /wp_data/sites
 
 #  example  python downloader_wp_test.py /data/world_peatlands/src/WorldPeatland/sites/Norfolk.geojson /data/world_peatlands/demo/dry_run/

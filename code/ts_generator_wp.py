@@ -1,12 +1,6 @@
 
-import numpy as np
 from WorldPeatland.code.downloader_wp_test import *
 from TATSSI.TATSSI.time_series.generator import Generator
-
-# use the sys path only if working in jupyter notebook
-# import sys
-# sys.path.append('/workspace/TATSSI')
-# sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
 '''ts_generator_wp 2nd script to run, it will generate time series for the MODIS data'''
 
@@ -104,6 +98,9 @@ def get_ts(site_directory, json_path):
 
     product_dir = [item for item in dir_ if item.startswith('M')]
 
+    # TODO remove this line later
+    product_dir = ['MCD43A3.061']
+
     for i, n in enumerate(product_dir):
 
         LOG.info(n)
@@ -160,7 +157,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory>")  # the user has to input one argument
+        print("Usage: python script.py <site_directory> <geojson_file>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         json_path = sys.argv[2]

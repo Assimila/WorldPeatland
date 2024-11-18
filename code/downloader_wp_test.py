@@ -557,7 +557,7 @@ def main(geojson_path, output_dir):
     #  path_modis = create_dir(output_dir, 'data/MODIS')
     path_modis = '/data/MODIS'
     LOG.info(f'Starting to download MODIS data for {site_area}')
-    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+    # get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')
     # get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
@@ -582,5 +582,8 @@ if __name__ == "__main__":
 
 # example in the VM of ESA
 # python downloader_wp_test.py /workspace/WorldPeatland/sites/Norfolk.geojson /wp_data/sites
+
+# when running in the linux command line in /workspace/
+# nohup python -m WorldPeatland.code.downloader_wp_test WorldPeatland/sites/CongoSouth.geojson /wp_data/sites > /workspace/logs/CongoSouth_albedo_down_20241118.log &
 
 #  example  python downloader_wp_test.py /data/world_peatlands/src/WorldPeatland/sites/Norfolk.geojson /data/world_peatlands/demo/dry_run/

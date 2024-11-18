@@ -3,12 +3,11 @@ import sys
 
 sys.path.append('workspace/WorldPeatland/code/')
 
-geojson = '/workspace/WorldPeatland/sites/Norfolk.geojson'
-site_name = 'Norfolk'
+geojson = '/workspace/WorldPeatland/sites/CongoSouth.geojson'
+site_name = 'CongoSouth'
 
 # Define the commands
 commands = [
-    # f'nohup python -m WorldPeatland.code.downloader_wp_test {geojson} /wp_data/sites/ > /workspace/logs/{site_name}_albedo_20241115.log &',
     f'python -m WorldPeatland.code.ts_generator_wp /wp_data/sites/{site_name}/ {geojson}',
     f'python -m WorldPeatland.code.apply_qa /wp_data/sites/{site_name}/ QA_settings',
     f'python -m WorldPeatland.code.smoothing /wp_data/sites/{site_name}/',

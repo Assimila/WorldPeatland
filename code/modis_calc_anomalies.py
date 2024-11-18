@@ -121,14 +121,16 @@ def main(ts_path, output_dir):
 
         ds, var_name = create_xarr_from_tif_path(path)
 
-        if var_name == '_Albedo_WSA_Band2':
-            break
+        # remove the wing years which only contains 6 months of the data
+        years = ds.coords['time'].dt.year
+        first_year = years.min().values
+        last_year = years.max().values
+        ds = ds.sel(time=(years > first_year) & (years < last_year))
 
+        # Calculate climatology
         ds_mean = ds.groupby("time.dayofyear").mean()
         ds_std = ds.groupby("time.dayofyear").std()
 
-        # Get the number of time steps for a complete year of this data variable
-        n_time_steps = len(ds.groupby("time.dayofyear"))
         # get the years from the data
         grouped_by_year = ds.time.groupby("time.year")  # type xarray.core.groupby.DataArrayGroupBy
         anomalies_list = []

@@ -382,10 +382,11 @@ def check_dates(start_date, end_date, sentinel_start_date):
 
 
 def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, project):
+    """ Download through GEE S1_GRD data only"""
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
 
-    # get the list of dates already downloaded 
+    # get the list of dates already downloaded
     dt_l = sentinel_file_checker(path_sentinel, site_area)
 
     s2_start_date = datetime.strptime('2017-03-28', '%Y-%m-%d')
@@ -396,7 +397,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
         return
     if dt_l:
 
-        # if dt_l is not empty and data is already downloaded then 
+        # if dt_l is not empty and data is already downloaded then
         # download the data by monthly chunks
 
         # run the dates generator and put it in a list as a calendar reference
@@ -412,34 +413,47 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                 j_end = (j.year, j.month, calendar.monthrange(j.year, j.month)[1])  # tuple format
                 j_end = datetime(*j_end).date()  # unpacks the tuple into datetime arguments
 
-                # run sentinel downloaders per month  
+                # run sentinel downloaders per month
                 sd = SentinelDownloader(geojson_path, j, j_end, project=project)
                 LOG.info(f'Sentinel data request from {j} to {j_end}')
-                new_dwn_files = sd.download_raw_all(path_sentinel + '/rawdata/', manual_key=site_area)
+
+                # only download s1
+                new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
-                LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel + '/datacube/'}")
+
+                # LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
 
     else:
         LOG.info(f'Starting to download Sentinel data for {site_area}')
+        # Let's loop over each year by itself
+        start_date = datetime(2019, 1, 1, 0, 0)
+        for year in range(start_date.year, end_date.year + 1):
+            if year == start_date.year:
+                start = start_date  # The first interval starts from the start_date
+            else:
+                start = datetime(year, 1, 1)  # Start from January 1st for subsequent years
+            if year == end_date.year:
+                end = end_date  # the last interval ends at end_date
+            else:
+                end = datetime(year, 12, 31)
 
-        # 1. Call SentinelDownloader class 
-        sd = SentinelDownloader(geojson_path, start_date.date(),
-                                end_date.date(), project=project)
-        LOG.info(f'Sentinel data request from {start_date.date()} to {end_date.date()}')
+            # Call SentinelDownloader class
+            sd = SentinelDownloader(geojson_path, start.date(),
+                                    end.date(), project=project)
+            LOG.info(f'Sentinel data request from {start.date()} to {end.date()}')
 
-        # 2. download all raw data in the rawdata folder 
-        new_dwn_files = sd.download_raw_all(path_sentinel + '/rawdata/', manual_key=site_area)
+            # only download s1
+            print(geojson_path)
+            new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
+            sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
-        # 3. write the files into the datacube structure as tiffs
-        sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
+            LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel + '/datacube/'}")
 
-        LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel + '/datacube/'}")
-
-    # remove all rawdata after datacube created
-    if os.path.exists(path_sentinel + '/rawdata/'):
-        # if the file exist remove it
-        shutil.rmtree(
-            path_sentinel + '/rawdata/')  # rmtree function will delete noob and all files and subdirectories below it
+            # remove all rawdata after datacube created
+            if os.path.exists(path_sentinel + '/rawdata/'):
+                # if the file exist remove it
+                shutil.rmtree(
+                    path_sentinel + '/rawdata/')  # rmtree function will delete noob and all files and subdirectories below it
 
 
 def get_viirs_archive(start_date, country, site_area, site_directory):
@@ -560,7 +574,7 @@ def main(geojson_path, output_dir):
     # get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')
-    # get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
+    get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
 
     # get_viirs_archive(start_date, country, site_area, site_directory)
 

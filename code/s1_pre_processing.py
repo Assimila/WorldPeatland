@@ -7,6 +7,7 @@ from save_xarray_to_gtiff_old import *
 from gdal_sheep import *
 from MLEO_NN import *
 from smoothn import smoothn
+from datetime import datetime as dt
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -50,6 +51,82 @@ def get_file_name(file_path):
     file_name = file_path_components[-1].rsplit('.', 1)
     return file_name[0], file_name[1]
 
+
+def gdal_stack_dt(lt, time):
+    '''
+    gdal_stack_dt function will open geotiffs files and concatenate the dataset,
+    set the time as datetime
+
+    INPUTS:
+        - lt (list) - list containing all the geotiffs files to be concatenated
+        - time (string) - check how the time variable is written in the tiff metadata
+
+    OUTPUTS:
+        - stacked_arr (np.array) - stacked array containing all the layers of the
+            input
+        - dts (list) - list of the datetimes
+        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
+    '''
+
+    # Create empty lists
+    ARRAYS_RESHAPED = []
+    dts = []
+
+    # loop throught the files
+    for e in lt:
+        # Check if the input is a str which would be the tif file
+        # otherwise it is already an opened gdal dataset
+
+        # print(e)
+
+        if type(e) == str:
+            # open the Dataset
+            opn = gdal.Open(e)
+
+        else:
+            opn = e
+
+        # Gdal counts from 1
+        for i in range(1, opn.RasterCount + 1):
+            rst = opn.GetRasterBand(i)
+            meta = rst.GetMetadata()
+            # following fill in with the corresponding format
+            # 'time' check the metadata of the tiff to see what they call
+            # the time data
+            x = meta[time]
+            # also check the metadata to see how is the format of datetime data
+            dt_format = '%Y-%m-%dT%X.000000000'
+            # dt_format = '%Y-%m-%d %H:%M:%S'  # '2017-03-05 10:10:21'
+            t = dt.strptime(x, dt_format)
+
+            # append it to the list
+            dts.append(t)
+
+        # save the last osegeodataset for its srs
+        saved_opn = opn
+
+        # open the array
+        arr = opn.ReadAsArray()
+
+        # check the dimensions of the array because cannot concatenate
+        # arrays with different dimensions they all should be 3d np.arrays
+        # some bands will have a 2d arrays meaning they only have one image
+        # for one date and not many dates
+        n = arr.ndim
+        if n == 2:
+            arr = arr[np.newaxis, :, :]
+
+        # append it to the list
+        ARRAYS_RESHAPED.append(arr)
+
+    if len(ARRAYS_RESHAPED) > 0:
+        stacked_arr = np.concatenate(ARRAYS_RESHAPED, axis=0)
+    else:
+        raise ValueError("No arrays to concatenate in ARRAYS_RESHAPED.")
+
+    return stacked_arr, dts, saved_opn
+
+
 def create_xr(orbit, output_dir, site_name):
     
     '''
@@ -65,26 +142,26 @@ def create_xr(orbit, output_dir, site_name):
     '''
     
     # get the required band_name and creates a list of products needed to extract corresponding files 
-    bd = [f'VV_{orbit}',f'VH_{orbit}',f'angle_{orbit}']
+    bd = [f'VV_{orbit}', f'VH_{orbit}', f'angle_{orbit}']
     
     # call the get_list_of_files function to get the nested list each key is a band name
     # and the values are the corresponding file paths for the different days the image was captured for this band 
-    nested = [sorted(glob.glob(f'{site_directory}/Sentinel/datacube/S1_GRD/%s/{tile_name}/*.tif'%i)) for i in bd]
+    nested = [sorted(glob.glob(f'{site_directory}/%s/*/*.tif'%i)) for i in bd]
     # create a dict to keep track of the name of the band for each list of file paths
     fdict = dict(zip(bd, nested))
     
     stack_list = []
     for i in fdict:
-        stack, dts, opn = gdal_stack_dt(fdict[i], 'time') # time attribute should be 'time' for all s1 images
+        stack, dts, opn = gdal_stack_dt(fdict[i], 'time')  # time attribute should be 'time' for all s1 images
         stack_list.append(stack)
     stack_dict = dict(zip(bd, stack_list))
     
     xs, ys = create_coord_list(opn)
     variable_name = bd
-    ds = xr.Dataset(data_vars = {i:(('time','latitude', 'longitude'),stack_dict[i])for i in bd},
-                   coords={'time': dts,
-                          'latitude': ys,
-                          'longitude': xs})
+    ds = xr.Dataset(data_vars = {i:(('time', 'latitude', 'longitude'), stack_dict[i])for i in bd},
+                    coords={'time': dts,
+                            'latitude': ys,
+                            'longitude': xs})
     
     return ds
 
@@ -97,7 +174,7 @@ def apply_threshold(ds):
 
 def calc_cr(ds, orbit):
     
-    '''
+    """"
     calc_cr function takes as input the xarray.dataset, returns a new xarray with cross ratio calculated,  
     and saves it as a netcdf file. 
     
@@ -107,10 +184,10 @@ def calc_cr(ds, orbit):
     OUTPUTS:
         - ds (xarray) - with cross ratio as the 4th variable (in total 4 variables)
 
-    '''
+    """
     
     # Calculate Cross Ratio 
-    ds = ds.assign(cr = ds[f"VH_{orbit}"] - ds[f'VV_{orbit}'])
+    ds = ds.assign(cr=ds[f"VH_{orbit}"] - ds[f'VV_{orbit}'])
     # Save as netcdf
     ds.to_netcdf(f'{site_directory}/Sentinel/cross_ratio_{orbit}.nc')
     
@@ -132,24 +209,34 @@ def transform_save(ds, orbit, saved_path):
     ds = gdal.Open(output_utm)
 
     # reproject to sinusoidal and resample to 10 by 10 pixel size
-    dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes = 10, yRes = 10)
-    ds = dsReprj = None # close the files
+    dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
+    ds = dsReprj = None  # close the files
     
     # delete utm files
     os.remove(output_utm)
     
     return output_sinu
 
-def main(site_directory, output_dir):
+def create_dir(path):
+    """
+    Create directory
+    """
+    os.makedirs(path, exist_ok=True)
+
+    return None
+
+def main(site_directory):
     
     # get the site name from site_directory
-    path_components = site_directory.split(os.sep)
-    site_name = path_components[-1]
-
+    site_name = site_directory.split("/")[3]
 
     orbits = ['ASCENDING', 'DESCENDING']
     
     for orbit in orbits:
+
+        output_dir = site_directory + '/CrossRatio'
+        create_dir(output_dir)
+
 
         ds = create_xr(orbit, output_dir , site_name)
 
@@ -193,12 +280,12 @@ def main(site_directory, output_dir):
 
 if __name__ == "__main__":
     
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
         print("Usage: python script.py <site_directory> <output_dir>") # the user has to input two arguments  
     else:
         site_directory = sys.argv[1] 
-        output_dir = sys.argv[2] 
-        main(site_directory, output_dir)
+        # output_dir = sys.argv[2]
+        main(site_directory)
         
         
         

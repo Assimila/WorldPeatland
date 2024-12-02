@@ -63,7 +63,7 @@ def transform_bbox(bbox, edge_samples=11):
 
 def get_ts(site_directory, json_path):
     """
-    INPUT site_directory from user, path to the folder where downloader_wp was run to download all 
+    INPUT site_fpath from user, path to the folder where downloader_wp was run to download all
     products 
     """
     modis_dir = site_directory + 'MODIS/'
@@ -148,7 +148,7 @@ def get_ts(site_directory, json_path):
 def main(site_directory, json_path):
     """
     INPUT
-        site_directory - str - path to a specific site where all data were previously downloaded
+        site_fpath - str - path to a specific site where all data were previously downloaded
     """
     get_ts(site_directory, json_path)
 
@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory> <geojson_file>")  # the user has to input one argument
+        print("Usage: python script.py <site_fpath> <geojson_file>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         json_path = sys.argv[2]

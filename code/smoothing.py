@@ -34,7 +34,7 @@ def main(site_directory):
     # get the specific config path for this site 
     # to get the dates and the products
     
-    # get the site name from site_directory
+    # get the site name from site_fpath
     path_components = site_directory.split(os.sep)
     site_name = path_components[-1]
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 2:
 
-        print("Usage: python script.py <site_directory>")  # the user has to input one argument
+        print("Usage: python script.py <site_fpath>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         main(site_directory)

@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory> <True/False>")  # the user has to input two arguments
+        print("Usage: python script.py <site_fpath> <True/False>")  # the user has to input two arguments
     else:
         site_directory = sys.argv[1]
         value = sys.argv[2].lower()

@@ -1,181 +1,55 @@
-
-import logging
-import sys
-sys.path.insert(0,'/workspace/WorldPeatland/code/')
 from save_xarray_to_gtiff_old import *
-
 from gdal_sheep import *
 from MLEO_NN import *
+from utils import *
 from smoothn import smoothn
-from datetime import datetime as dt
+from dask.diagnostics import ProgressBar
+import re
+from itertools import chain
+from collections import defaultdict
+import logging
+import sys
+
+sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
-def create_dir(output_dir, directory):
-    
-    '''
-    create_dir fucntion will first check if the directory already exist if not it will 
-    create a directory where it will store the data to be downloaded
-    
-    INPUTS:
-        - output_dir (str/path) - specified by the user where they want the data to be downloaded
-        - directory (str) - specified by each step in the code to create, usually its the name of the data product to be downloaded
-    '''
 
-    # Path 
-    path = os.path.join(output_dir, directory) 
-    
-    if not os.path.exists(path):
-        os.makedirs(path)
-        LOG.info(f"Directory '{path}' created successfully.")
-    else:
-        LOG.info(f"Directory '{path}' already exists.")
+def create_xr(fdict):
+    """
 
-    return path
+    create_xr function takes as input asc or desc and returns a xr with 3 data variables VV, VH and angles
+    of the input orbit.
+    """
 
-def get_file_name(file_path):
-    
-    '''get_file_name from the file path returns the modis data product name
-    and the version 
-    
-    INPUT
-        - file_path (str) - it would be the one set by the user when running the downloader_wp
-            + MODIS the path specific to download MODIS data
-    OUTPUT
-        - file_name[0] (str) - in this case it would be the MODIS data product name
-        - file_name[1] (str) - in this case it would be the MODIS data product version
-    '''
-    
-    file_path_components = file_path.split('/')
-    file_name = file_path_components[-1].rsplit('.', 1)
-    return file_name[0], file_name[1]
+    bands = []
+    stack_arr = []
+    for i, j in fdict.items():
+        arr, dts, opn = gdal_dt(j)
+        stack_arr.append(arr)
+        bands.append(i)
+    stack_dict = dict(zip(bands, stack_arr))
 
-
-def gdal_stack_dt(lt, time):
-    '''
-    gdal_stack_dt function will open geotiffs files and concatenate the dataset,
-    set the time as datetime
-
-    INPUTS:
-        - lt (list) - list containing all the geotiffs files to be concatenated
-        - time (string) - check how the time variable is written in the tiff metadata
-
-    OUTPUTS:
-        - stacked_arr (np.array) - stacked array containing all the layers of the
-            input
-        - dts (list) - list of the datetimes
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
-    '''
-
-    # Create empty lists
-    ARRAYS_RESHAPED = []
-    dts = []
-
-    # loop throught the files
-    for e in lt:
-        # Check if the input is a str which would be the tif file
-        # otherwise it is already an opened gdal dataset
-
-        # print(e)
-
-        if type(e) == str:
-            # open the Dataset
-            opn = gdal.Open(e)
-
-        else:
-            opn = e
-
-        # Gdal counts from 1
-        for i in range(1, opn.RasterCount + 1):
-            rst = opn.GetRasterBand(i)
-            meta = rst.GetMetadata()
-            # following fill in with the corresponding format
-            # 'time' check the metadata of the tiff to see what they call
-            # the time data
-            x = meta[time]
-            # also check the metadata to see how is the format of datetime data
-            dt_format = '%Y-%m-%dT%X.000000000'
-            # dt_format = '%Y-%m-%d %H:%M:%S'  # '2017-03-05 10:10:21'
-            t = dt.strptime(x, dt_format)
-
-            # append it to the list
-            dts.append(t)
-
-        # save the last osegeodataset for its srs
-        saved_opn = opn
-
-        # open the array
-        arr = opn.ReadAsArray()
-
-        # check the dimensions of the array because cannot concatenate
-        # arrays with different dimensions they all should be 3d np.arrays
-        # some bands will have a 2d arrays meaning they only have one image
-        # for one date and not many dates
-        n = arr.ndim
-        if n == 2:
-            arr = arr[np.newaxis, :, :]
-
-        # append it to the list
-        ARRAYS_RESHAPED.append(arr)
-
-    if len(ARRAYS_RESHAPED) > 0:
-        stacked_arr = np.concatenate(ARRAYS_RESHAPED, axis=0)
-    else:
-        raise ValueError("No arrays to concatenate in ARRAYS_RESHAPED.")
-
-    return stacked_arr, dts, saved_opn
-
-
-def create_xr(orbit, output_dir, site_name):
-    
-    '''
-    create_xr function takes as input asc or desc and returns an xr with 3 data variables VV, VH and angles
-    of the input orbit. 
-    
-    INPUTS:
-        - orbit (string) - ASCENDING or DESCENDING
-
-    OUTPUTS:
-        - ds (xarray.Dataset) - 
-
-    '''
-    
-    # get the required band_name and creates a list of products needed to extract corresponding files 
-    bd = [f'VV_{orbit}', f'VH_{orbit}', f'angle_{orbit}']
-    
-    # call the get_list_of_files function to get the nested list each key is a band name
-    # and the values are the corresponding file paths for the different days the image was captured for this band 
-    nested = [sorted(glob.glob(f'{site_directory}/%s/*/*.tif'%i)) for i in bd]
-    # create a dict to keep track of the name of the band for each list of file paths
-    fdict = dict(zip(bd, nested))
-    
-    stack_list = []
-    for i in fdict:
-        stack, dts, opn = gdal_stack_dt(fdict[i], 'time')  # time attribute should be 'time' for all s1 images
-        stack_list.append(stack)
-    stack_dict = dict(zip(bd, stack_list))
-    
     xs, ys = create_coord_list(opn)
-    variable_name = bd
-    ds = xr.Dataset(data_vars = {i:(('time', 'latitude', 'longitude'), stack_dict[i])for i in bd},
+    ds = xr.Dataset(data_vars={bd: (('time', 'latitude', 'longitude'), stack_dict[bd]) for bd in bands},
                     coords={'time': dts,
                             'latitude': ys,
                             'longitude': xs})
-    
+
     return ds
 
+
 def apply_threshold(ds):
-    
     for var_name in ds.data_vars:
         if var_name.startswith('V'):
             ds[var_name] = ds[var_name].where(ds[var_name] > -30, np.nan)
     return ds
 
-def calc_cr(ds, orbit):
-    
-    """"
-    calc_cr function takes as input the xarray.dataset, returns a new xarray with cross ratio calculated,  
+
+def calc_cr(ds, orbit, output_dir):
+    """
+    calc_cr function takes as input the xarray.Dataset, returns a new xarray with cross ratio calculated,
     and saves it as a netcdf file. 
     
     INPUTS:
@@ -185,108 +59,190 @@ def calc_cr(ds, orbit):
         - ds (xarray) - with cross ratio as the 4th variable (in total 4 variables)
 
     """
-    
+
     # Calculate Cross Ratio 
-    ds = ds.assign(cr=ds[f"VH_{orbit}"] - ds[f'VV_{orbit}'])
+    ds = ds.assign(cr=ds[f"VH"] - ds[f'VV'])
     # Save as netcdf
-    ds.to_netcdf(f'{site_directory}/Sentinel/cross_ratio_{orbit}.nc')
-    
+    ds.to_netcdf(f'{output_dir}/cross_ratio_{orbit}.nc')
+
     return ds
 
-def transform_save(ds, orbit, saved_path):
-    
+
+def transform_save(orbit, saved_path):
     # save_xarray can only save one variable
     # do we create a new one that can fit more than one variable?
     # because need to save observation and cross ratio 
-    # ==>> maybe try to to save xarray with many variables for each orbit. 
-    'ex: ascending orbit has an xarray with cross ratio, VV and VH'
+    # ==>> maybe try to save xarray with many variables for each orbit.
+    # 'ex: ascending orbit has a xarray with cross ratio, VV and VH'
     output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
-#     save_xarray_old(output_utm, ds, 'cr')
-    
+    #     save_xarray_old(output_utm, ds, 'cr')
+
     # change projection from utm to sinusoidal 
     output_sinu = saved_path + f'/cross_ratio_{orbit}_sinusoidal_resampled.tif'
     proj4_string = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
     ds = gdal.Open(output_utm)
 
     # reproject to sinusoidal and resample to 10 by 10 pixel size
-    dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
-    ds = dsReprj = None  # close the files
-    
+    gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
+
     # delete utm files
     os.remove(output_utm)
-    
+
     return output_sinu
 
-def create_dir(path):
-    """
-    Create directory
-    """
-    os.makedirs(path, exist_ok=True)
 
-    return None
+def get_timestep_from_tif(tif):
+    """
+    Extract the timestep (date) from a geotif filename
 
-def main(site_directory):
-    
-    # get the site name from site_directory
-    site_name = site_directory.split("/")[3]
+    INPUT
+        - tif (string) - tif file path where the filename ends with for example *2018-06.*extension*
+
+    OUTPUT
+        - timestep (string) - example 2018-06 (YYYY-MM)
+    """
+
+    # Search for the same file but for all other reflectance bands
+    # get the date from tif file name
+    filename = os.path.basename(tif)
+    # Match using regex pattern in filename
+    match = re.search(r'\d{4}-\d{2}', filename)  # date YYYY (4 digits) and MM (2 digits)
+
+    return match.group()
+
+
+def group_tifs_by_date(site_fpath, orbit):
+    """
+    Groups `.tif` files by their timestep (date) based on the provided directory and orbit.
+
+    Args:
+        site_fpath (str): Path to the base directory containing `.tif` files.
+        orbit (str): The orbit name to filter the bands.
+
+    Returns:
+        dict: A dictionary where keys are timesteps (dates) and values are lists of `.tif` file paths.
+    """
+    # Define the required bands
+    bands = [f'VV_{orbit}', f'VH_{orbit}', f'angle_{orbit}']
+
+    # Get a flattened list of all `.tif` file paths for the corresponding bands
+    flat_list = list(chain.from_iterable(
+        sorted(glob.glob(f'{site_fpath}/%s/*/*.tif' % band)) for band in bands
+    ))
+
+    # Initialize a default dict to hold lists of file paths for each date
+    grouped_tifs = defaultdict(list)
+
+    # Iterate through each `.tif` file
+    for month_tif in flat_list:
+        # Extract the timestep (date) from the filename
+        timestep = get_timestep_from_tif(month_tif)
+
+        # Group the file under its corresponding timestep
+        grouped_tifs[timestep].append(month_tif)
+
+    # Convert default dict to a regular dictionary and return it
+    return dict(grouped_tifs)
+
+
+def dask_smooth(in_ds, var2smooth, window, isrobust):
+    """
+    Smooth a given variable in a dataset using smoothn.
+
+    INPUTS:
+        - in_ds: Input xarray Dataset
+        - var2smooth: Variable to smooth
+        - window: Smoothing window parameter (s in smoothn)
+        - isrobust: Whether to use robust smoothing
+
+    OUTPUTS:
+        - our_xr_ds: Smoothed xarray Dataset
+    """
+    smooth_ar = smoothn(y=in_ds[var2smooth].values,
+                        s=window, isrobust=isrobust, axis=0)[0]
+
+    our_xr_ds = xr.Dataset({var2smooth: (('time', 'latitude', 'longitude'),
+                                         smooth_ar)},
+                           coords=in_ds.coords)
+    return our_xr_ds
+
+
+def main(site_fpath):
 
     orbits = ['ASCENDING', 'DESCENDING']
-    
+
     for orbit in orbits:
 
-        output_dir = site_directory + '/CrossRatio'
-        create_dir(output_dir)
+        output_dir = create_dir(site_fpath, f'CrossRatio_{orbit}')
 
+        grouped_tifs = group_tifs_by_date(site_fpath, orbit)
 
-        ds = create_xr(orbit, output_dir , site_name)
+        monthly_outputs = []
 
-        _ds = apply_threshold(ds)
+        for timestep, files in grouped_tifs.items():
 
-        # TODO seperate per angles??
+            # Create the dictionary from files to stack and concatenate the datasets in xarray format
+            files_dict = {}
+            for file in files:
+                if "VV" in file:
+                    files_dict["VV"] = file
+                elif "VH" in file:
+                    files_dict["VH"] = file
+                elif "angle" in file:
+                    files_dict["angle"] = file
 
-        ds_cr = calc_cr(_ds, orbit)
+            ds = create_xr(files_dict)
+            _ds = apply_threshold(ds)
 
-        # set the current projection taken from linux gdalinfo -proj4 from a random sentinel-1 tif 
-        # TODO automatic getting the projection for each zone 
-        # think about if 2 zones for one site 
-        # then will have to get the zone that is covering the largest area
-        ds_cr.attrs['crs'] = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs '
+            # TODO separate per angles??
 
-        saved_path = create_dir(f'{site_directory}/Sentinel/', 'CrossRatio')
-        
-        output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
-        save_xarray_old(output_utm, ds, 'cr')
+            ds_cr = calc_cr(_ds, orbit, output_dir)
 
-        # change projection from utm to sinusoidal
-#         output_sinu = transform_save(ds_cr, orbit, saved_path)
-#         LOG.info(f'Cross Ratio for {orbit} has been saved here {saved_path}')
+            # TODO think about if 2 zones for one site
+            # then will have to get the zone that is covering the largest area
+            proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
 
-#         # Create an xarray to be able to perform smoothn 
-#         arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
-#         ds = create_xarr(saved_opn, 'cr', arr, dts)
+            output_utm = output_dir + f'/cross_ratio_{orbit}_utm_{timestep}.tif'
+            monthly_outputs.append(output_utm)
+            save_xarray_old(output_utm, ds_cr, 'cr')
 
-        # smoothn return first the smoothend data and some other quality data...
-        s_smoothn = smoothn(y=ds_cr['cr'], isrobust=True, axis=0)[0]
+            # change projection from utm to sinusoidal
+        #           output_sinu = transform_save(ds_cr, orbit, saved_path)
+        #           LOG.info(f'Cross Ratio for {orbit} has been saved here {saved_path}')
 
-        # Save pixel level data final output after processing into geotif
-        ds_s = create_xarr(saved_opn, 'cr_smooth', s_smoothn, dts)
+        #           # Create an xarray to be able to perform smoothn
+        #           arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
+        #           ds = create_xarr(saved_opn, 'cr', arr, dts)
 
-#         # add the crs as attribute 
-#         ds_s.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
+        # open all cross ratio tiffs and put in one xarray
+        stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
+        ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
 
-        fname = saved_path + f'/cross_ratio_{orbit}_utm_resampled_smoothn.tif'
-        save_xarray_old(fname, ds_s, f'cr_smooth')
-        LOG.info(f'Cross Ratio Smoothened for {orbit} has been saved here fname')
+        # smoothn should happen on all the time series per orbit
+        # Chunk the dataset to enable Dask computation
+        dask_chunks = ds_all_years.chunk({"latitude": 5, "longitude": 5})
+
+        # Apply the smoothing function using map_blocks
+        # dask_output is a xarray.Dataset
+        with ProgressBar():
+            dask_output = xr.map_blocks(
+                dask_smooth,
+                dask_chunks,
+                args=('cr', 3, True)  # Pass variable name, window size, and robust flag
+            ).compute()
+
+        dask_output.attrs['crs'] = proj4_string
+
+        output_ts_dir = create_dir(output_dir, 'timeSeries')
+        fname = output_ts_dir + f'/cross_ratio_{orbit}_utm_smoothn.tif'
+        save_xarray_old(fname, dask_output, f'cr')
+        LOG.info(f'Cross Ratio {orbit} Smoothened and saved here: {fname}')
+
 
 if __name__ == "__main__":
-    
+
     if len(sys.argv) != 2:
-        print("Usage: python script.py <site_directory> <output_dir>") # the user has to input two arguments  
+        print("Usage: python script.py <site_fpath> <output_dir>")
     else:
-        site_directory = sys.argv[1] 
-        # output_dir = sys.argv[2]
+        site_directory = sys.argv[1]
         main(site_directory)
-        
-        
-        
-        

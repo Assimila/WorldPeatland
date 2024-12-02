@@ -24,7 +24,7 @@ def main(site_directory, QA_settings):
     # get the specific config path for this site 
     # to get the dates and the products
 
-    # get the site name from site_directory
+    # get the site name from site_fpath
     config = glob.glob(site_directory + f'*_config.yml')
     config_fname = config[0]
 
@@ -145,7 +145,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_directory> <QA_settings>")  # the user has to input one argument
+        print("Usage: python script.py <site_fpath> <QA_settings>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         QA_settings = sys.argv[2]

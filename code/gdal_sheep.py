@@ -3,128 +3,172 @@ from osgeo import gdal_array
 import numpy as np
 from datetime import datetime as dt
 import xarray as xr
+import subprocess
+import re
 
-def gdal_dt(e, time):
-    
-    '''
-    gdal_dt function will open the tif file as an osegeo gdal dataset 
-    
+
+def gdal_dt(e):
+    """
+    gdal_dt function will open the tif file as an OSGeo gdal dataset
+
     INPUTS:
-        - e (str or tiff) - path the tiff file or the gdal dataset you want to 
-            open and save its datetimes
+        - e (str or tiff) - path the tiff file or the gdal dataset you want to
+            open and save its datetime
         - time (string) - check how the time variable is written in the tiff metadata
     Outputs:
         - arr (np.array) - return arr of the gdal dataset
-        - dts (list) - list of the datetimes 
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs 
-    '''
-    
-    # Create an empty list to store the datatimes 
+        - dts (list) - list of the datetime
+        - saved_opn (OSGeo gdal dataset) - saved dataset for its srs
+    """
+
+    # Create an empty list to store the datetime
     dts = []
-    
+
     # Check if the input is a str which would be the tif file 
     # otherwise it is already an opened gdal dataset 
-    if type(e) == str:
+    if str == type(e):
         # open the Dataset
         opn = gdal.Open(e)
     else:
         opn = e
-        
-    for i in range(1,opn.RasterCount + 1):
-            
+
+    for i in range(1, opn.RasterCount + 1):
+
         rst = opn.GetRasterBand(i)
         meta = rst.GetMetadata()
-        
+
         # following fill in with the corresponding format 
         # 'time' check the metadata of the tiff to see what they call
         # could also be 'RANGEBEGINNINGDATE'
         # the time data
-        x = meta[time]
-        # also check the metadata to see how is the format of datetime data
-        # dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
-        dt_format = '%Y-%m-%d %H:%M:%S'
-        #dt_format = '%Y-%m-%d'
-        t = dt.strptime(x, dt_format)
-            
+        time_keys = ['time', 'RANGEBEGINNINGDATE', 'DATE']
+        for key in time_keys:
+            if key in meta:
+                x = meta[key]
+                break
+        else:
+            raise KeyError("No valid time key found in metadata.")
+
+        # Possible datetime formats to try
+        dt_formats = [
+            '%Y-%m-%dT%H:%M:%S.000000000',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d'
+        ]
+
+        # Initialize the datetime object
+        t = None
+
+        # Attempt to parse the datetime using the possible formats
+        for dt_format in dt_formats:
+            try:
+                t = dt.strptime(x, dt_format)
+                break  # Stop if parsing is successful
+            except ValueError:
+                continue  # Try the next format if parsing fails
+
+        # Raise an error if all formats fail
+        if t is None:
+            raise ValueError(f"None of the datetime formats matched the value: {x}")
+
         # append it to the list
         dts.append(t)
-                        
+
     # save the last osegeodataset for its srs
     saved_opn = opn
-        
+
     # open the array
     arr = opn.ReadAsArray()
-    
+
     return arr, dts, saved_opn
 
 
+def gdal_stack_dt(lt):
+    """
+    gdal_stack_dt function will open geo-tiffs files and concatenate the dataset,
+    set the time as datetime (=> to open many geo-tiffs and stack them)
 
-def gdal_stack_dt(lt, time):
-    
-    '''
-    gdal_stack_dt function will open geotiffs files and concatenate the dataset, 
-    set the time as datetime 
-    
     INPUTS:
-        - lt (list) - list containing all the geotiffs files to be concatenated
-        - time (string) - check how the time variable is written in the tiff metadata
-    
+        - lt (list) - list containing all the geo-tiffs files to be concatenated
+
     OUTPUTS:
-        - stacked_arr (np.array) - stacked array containing all the layers of the 
+        - stacked_arr (np.array) - stacked array containing all the layers of the
             input
-        - dts (list) - list of the datetimes 
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs 
-    '''
-    
+        - dts (list) - list of the datetime
+        - saved_opn (OSGeo gdal dataset) - saved dataset for its srs
+    """
+
     # Create empty lists
     ARRAYS_RESHAPED = []
     dts = []
-    
-    # loop throught the files
+
+    # loop through the files
     for e in lt:
         # Check if the input is a str which would be the tif file 
         # otherwise it is already an opened gdal dataset
-        
-        #print(e)
-        
-        if type(e) == str:
+
+        if str == type(e):
             # open the Dataset
             opn = gdal.Open(e)
-            
+
         else:
             opn = e
-            
+
         # Gdal counts from 1 
-        for i in range(1,opn.RasterCount + 1):
-            
+        for i in range(1, opn.RasterCount + 1):
+
             rst = opn.GetRasterBand(i)
             meta = rst.GetMetadata()
             # following fill in with the corresponding format 
             # 'time' check the metadata of the tiff to see what they call
             # the time data            
-            x = meta[time]
-            # also check the metadata to see how is the format of datetime data
-            # dt_format = '%Y-%m-%dT%X.000000000'
-            dt_format = '%Y-%m-%d %H:%M:%S'  # '2017-03-05 10:10:21'
-            t = dt.strptime(x, dt_format)
-            
+            time_keys = ['time', 'RANGEBEGINNINGDATE', 'DATE']
+            for key in time_keys:
+                if key in meta:
+                    x = meta[key]
+                    break
+            else:
+                raise KeyError("No valid time key found in metadata.")
+
+            # Possible datetime formats to try
+            dt_formats = [
+                '%Y-%m-%dT%H:%M:%S.000000000',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d'
+            ]
+
+            # Initialize the datetime object
+            t = None
+
+            # Attempt to parse the datetime using the possible formats
+            for dt_format in dt_formats:
+                try:
+                    t = dt.strptime(x, dt_format)
+                    break  # Stop if parsing is successful
+                except ValueError:
+                    continue  # Try the next format if parsing fails
+
+            # Raise an error if all formats fail
+            if t is None:
+                raise ValueError(f"None of the datetime formats matched the value: {x}")
+
             # append it to the list
             dts.append(t)
-                        
+
         # save the last osegeodataset for its srs
         saved_opn = opn
-        
+
         # open the array
         arr = opn.ReadAsArray()
-        
+
         # check the dimensions of the array because cannot concatenate
         # arrays with different dimensions they all should be 3d np.arrays
         # some bands will have a 2d arrays meaning they only have one image 
         # for one date and not many dates
-        n = arr.ndim 
-        if n == 2: 
+        n = arr.ndim
+        if n == 2:
             arr = arr[np.newaxis, :, :]
-            
+
         # append it to the list
         ARRAYS_RESHAPED.append(arr)
 
@@ -137,55 +181,55 @@ def gdal_stack_dt(lt, time):
 
 
 def create_xarr(opn, var_name, arr, dts):
-    '''
-    create_xarr function will create an xarray 
+    """
+    create_xarr function will create a xarray
     INPUTS:
-        - opn (osgeo gdal dataset) - 
+        - opn (osgeo gdal dataset) -
         - var_name (string) - name of the variable, or the band or the information
-            stored in the pixels of the tif, or in the array 
-        - arr (np.array) - contains all the data values to be stored from a tiff 
-            to an xarray
+            stored in the pixels of the tif, or in the array
+        - arr (np.array) - contains all the data values to be stored from a tiff
+            to a xarray
     OUTPUTS:
         - ds (xarray) - dataset of the xarray
-    '''
+    """
     # create the x and y list of coordinates 
-    # GetGeotransform gets me the corner coordinates of the tiff 
+    # GetGeotransform gets me the corner coordinates of the tiff
     # i.e. (564550.0, 10.0, 0.0, 5931390.0, 0.0, -10.0)
     params = opn.GetGeoTransform()  # params is a tuple 
-    xs = np.array([params[0]+(params[1]*i) + (params[1]/2) for i in np.arange(opn.RasterXSize)])
-    # params[0] is the top left point x/lon coordinate value
-    # prams[1] is the length along the x axis of 1 pixel
-    # RasterXSize is the total number of pixels along the x-axis (later it would be the size of the whole tiff of xarray)
-    ys = np.array([params[3]+(params[5]*i) + (params[5]/2) for i in np.arange(opn.RasterYSize)]) 
+    xs = np.array([params[0] + (params[1] * i) + (params[1] / 2) for i in np.arange(opn.RasterXSize)])
+    # params[0] is the top left point x/lon coordinate value prams[1] is the length along the x-axis of 1 pixel
+    # RasterXSize is the total number of pixels along the x-axis (later it would be the size of the whole tiff of
+    # xarray)
+    ys = np.array([params[3] + (params[5] * i) + (params[5] / 2) for i in np.arange(opn.RasterYSize)])
     # params[3] is the same point top left but now its y/lat coordinate value 
-    # params[5] is the length or step to reach the second point along the y axis of one pixel 
+    # params[5] is the length or step to reach the second point along the y-axis of one pixel
     # it is - because you are going downward the y-axis or latitude line 
 
     variable_name = var_name
 
-    ds = xr.Dataset(data_vars = {variable_name:(('time','latitude', 'longitude'),arr)},
-                   coords={'time': dts,
-                          'latitude': ys,
-                          'longitude': xs})
+    ds = xr.Dataset(data_vars={variable_name: (('time', 'latitude', 'longitude'), arr)},
+                    coords={'time': dts,
+                            'latitude': ys,
+                            'longitude': xs})
     return ds
 
+
 def create_coord_list(opn):
-    '''Path the osgeo gdal database that you need to get the references xs and ys'''
+    """Path the osgeo gdal database that you need to get the references xs and ys"""
     params = opn.GetGeoTransform()
-    xs = [params[0]+(params[1]*i) for i in np.arange(opn.RasterXSize)]
-    ys = [params[3]+(params[5]*i) for i in np.arange(opn.RasterYSize)]
-    
-    x = [params[0]+(params[1]*i) + (params[1]/2) for i in np.arange(opn.RasterXSize)]
-    y = [params[3]+(params[5]*i) + (params[5]/2) for i in np.arange(opn.RasterYSize)]
-    
+    xs = [params[0] + (params[1] * i) for i in np.arange(opn.RasterXSize)]
+    ys = [params[3] + (params[5] * i) for i in np.arange(opn.RasterYSize)]
+
+    x = [params[0] + (params[1] * i) + (params[1] / 2) for i in np.arange(opn.RasterXSize)]
+    y = [params[3] + (params[5] * i) + (params[5] / 2) for i in np.arange(opn.RasterYSize)]
+
     print(f'old: {xs} , {ys}')
-    print('new: ', x,y)
-    
-    return xs,ys
+    print('new: ', x, y)
+
+    return xs, ys
 
 
-def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val = -9999):
- 
+def reproject_image(source_img, target_img, clip_shapefile=None, no_data_val=-9999):
     """
     Taken from Alex
     Function to reproject a source image onto the exact same spatial grid, so it
@@ -206,11 +250,11 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
     """
 
     # get the details of the source image
-    if type(source_img) == str:
+    if str == type(source_img):
         s = gdal.Open(source_img)
     else:
         s = target_img
- 
+
     geo_s = s.GetGeoTransform()
     s_x_size, s_y_size = s.RasterXSize, s.RasterYSize
     s_xmin = min(geo_s[0], geo_s[0] + s_x_size * geo_s[1])
@@ -218,7 +262,7 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
     s_ymin = min(geo_s[3], geo_s[3] + s_y_size * geo_s[5])
     s_ymax = max(geo_s[3], geo_s[3] + s_y_size * geo_s[5])
     s_xRes, s_yRes = abs(geo_s[1]), abs(geo_s[5])
- 
+
     # get the details of the target image
     if type(target_img) == str:
         t = gdal.Open(target_img)
@@ -231,35 +275,35 @@ def reproject_image(source_img, target_img, clip_shapefile = None, no_data_val =
     ymin = min(geo_t[3], geo_t[3] + y_size * geo_t[5])
     ymax = max(geo_t[3], geo_t[3] + y_size * geo_t[5])
     xRes, yRes = abs(geo_t[1]), abs(geo_t[5])
- 
+
     if (s_x_size == x_size) & (s_y_size == y_size) & \
-       (s_xmin == xmin) & (s_ymin == ymin) & \
-       (s_xmax == xmax) & (s_ymax == ymax) & \
-       (s_xRes == xRes) & (s_yRes == yRes):
- 
+            (s_xmin == xmin) & (s_ymin == ymin) & \
+            (s_xmax == xmax) & (s_ymax == ymax) & \
+            (s_xRes == xRes) & (s_yRes == yRes):
+
         if clip_shapefile is not None:
             g = gdal.Warp('', source_img, format='MEM',
-                    cutlineDSName=clip_shapefile,
-                    cropToCutline=True, dstNodata=no_data_val)
+                          cutlineDSName=clip_shapefile,
+                          cropToCutline=True, dstNodata=no_data_val)
         else:
             g = gdal.Open(source_img)
- 
+
     else:
- 
+
         dstSRS = osr.SpatialReference()
         raster_wkt = t.GetProjection()
         dstSRS.ImportFromWkt(raster_wkt)
- 
+
         if clip_shapefile is not None:
             g = gdal.Warp('', source_img, format='MEM',
-                      outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
-                      dstSRS=dstSRS, cutlineDSName=clip_shapefile,
-                    cropToCutline=True, dstNodata=no_data_val)
- 
+                          outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
+                          dstSRS=dstSRS, cutlineDSName=clip_shapefile,
+                          cropToCutline=True, dstNodata=no_data_val)
+
         else:
             g = gdal.Warp('', source_img, format='MEM',
-                      outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
-                      dstSRS=dstSRS)
+                          outputBounds=[xmin, ymin, xmax, ymax], xRes=xRes, yRes=yRes,
+                          dstSRS=dstSRS)
     return g
 
 
@@ -268,7 +312,7 @@ def save_3d_masks(in_arr, gdalobj, save_name):
     Alex's function
 
     INPUTS
-        - in_arr (numpy array) - 3d arrray with the data to be saved in tif
+        - in_arr (numpy array) - 3d array with the data to be saved in tif
         - gdalobj - of one image that has the same coordinate system & ...
         - save_name (string) - path with tif filename
     """
@@ -295,3 +339,41 @@ def save_3d_masks(in_arr, gdalobj, save_name):
 
     outRaster.SetProjection(gdalobj.GetProjection())
     outband.FlushCache()
+
+
+def get_proj4_from_tif(tif_file, xarray=None):
+    """
+    Extracts the PROJ.4 string from a given GeoTIFF file and optionally assigns it to a xarray dataset.
+
+    INPUTS:
+        - tif_file (str): Path to the input GeoTIFF file.
+        - xarray (xarray.Dataset, optional): An xarray dataset to which the CRS attribute will be added.
+
+    OUTPUT:
+        - proj4_string (str): The extracted PROJ.4 string.
+        @rtype: str
+    """
+    try:
+        # Command to extract PROJ.4 string using gdalinfo
+        command = ['gdalinfo', tif_file, '-proj4']
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        # Check for errors in the gdalinfo output
+        if result.returncode != 0:
+            raise RuntimeError(f"Error running gdalinfo: {result.stderr}")
+
+        # Use regex to find the PROJ.4 string in the output
+        proj4_match = re.search(r"PROJ\.4 string is:\n'(.*?)'", result.stdout)
+        if not proj4_match:
+            raise ValueError("PROJ.4 string not found in gdalinfo output.")
+
+        proj4_string = proj4_match.group(1)
+
+        # Optionally set the PROJ.4 string as an attribute in the xarray dataset
+        if xarray is not None:
+            xarray.attrs['crs'] = proj4_string
+
+        return proj4_string
+
+    except Exception as e:
+        raise RuntimeError(f"An error occurred while extracting the PROJ.4 string: {e}")

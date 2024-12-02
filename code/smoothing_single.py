@@ -44,7 +44,7 @@ def main():
         # get the specific config path for this site 
         # to get the dates and the products
     
-        # get the site name from site_directory
+        # get the site name from site_fpath
         config = glob.glob(site_directory + f'*_config.yml') 
         config_fname =  config[0]
         start_date, end_date, products = read_config(config_fname)
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 1:
 
-        print("Usage: python script.py <site_directory>") # the user has to input one argument
+        print("Usage: python script.py <site_fpath>") # the user has to input one argument
     else:
         main()
         

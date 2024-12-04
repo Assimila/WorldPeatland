@@ -223,9 +223,6 @@ def create_coord_list(opn):
     x = [params[0] + (params[1] * i) + (params[1] / 2) for i in np.arange(opn.RasterXSize)]
     y = [params[3] + (params[5] * i) + (params[5] / 2) for i in np.arange(opn.RasterYSize)]
 
-    print(f'old: {xs} , {ys}')
-    print('new: ', x, y)
-
     return xs, ys
 
 

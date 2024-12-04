@@ -1,10 +1,9 @@
-from save_xarray_to_gtiff_old import *
-from gdal_sheep import *
-from MLEO_NN import *
-from utils import *
+from WorldPeatland.code.save_xarray_to_gtiff_old import *
+from WorldPeatland.code.gdal_sheep import *
+from WorldPeatland.code.MLEO_NN import *
+from WorldPeatland.code.utils import *
 from smoothn import smoothn
 from dask.diagnostics import ProgressBar
-import re
 from itertools import chain
 from collections import defaultdict
 import logging
@@ -18,11 +17,9 @@ LOG = logging.getLogger(__name__)
 
 def create_xr(fdict):
     """
-
-    create_xr function takes as input asc or desc and returns a xr with 3 data variables VV, VH and angles
+    create_xr function takes as input asc or desc and returns an xr.Dataset with 3 data variables VV, VH, and angles
     of the input orbit.
     """
-
     bands = []
     stack_arr = []
     for i, j in fdict.items():
@@ -31,13 +28,22 @@ def create_xr(fdict):
         bands.append(i)
     stack_dict = dict(zip(bands, stack_arr))
 
+    # Check if there is only one timestep
+    if len(dts) == 1:
+        # Add a new axis to each array in stack_dict to include the time dimension
+        for bd in stack_dict:
+            stack_dict[bd] = stack_dict[bd][np.newaxis, :, :]  # Reshape to (1, latitude, longitude)
+
     xs, ys = create_coord_list(opn)
-    ds = xr.Dataset(data_vars={bd: (('time', 'latitude', 'longitude'), stack_dict[bd]) for bd in bands},
-                    coords={'time': dts,
-                            'latitude': ys,
-                            'longitude': xs})
+    ds = xr.Dataset(
+        data_vars={bd: (('time', 'latitude', 'longitude'), stack_dict[bd]) for bd in bands},
+        coords={'time': dts,
+                'latitude': ys,
+                'longitude': xs}
+    )
 
     return ds
+
 
 
 def apply_threshold(ds):
@@ -47,7 +53,7 @@ def apply_threshold(ds):
     return ds
 
 
-def calc_cr(ds, orbit, output_dir):
+def calc_cr(ds):
     """
     calc_cr function takes as input the xarray.Dataset, returns a new xarray with cross ratio calculated,
     and saves it as a netcdf file. 
@@ -62,8 +68,6 @@ def calc_cr(ds, orbit, output_dir):
 
     # Calculate Cross Ratio 
     ds = ds.assign(cr=ds[f"VH"] - ds[f'VV'])
-    # Save as netcdf
-    ds.to_netcdf(f'{output_dir}/cross_ratio_{orbit}.nc')
 
     return ds
 
@@ -89,26 +93,6 @@ def transform_save(orbit, saved_path):
     os.remove(output_utm)
 
     return output_sinu
-
-
-def get_timestep_from_tif(tif):
-    """
-    Extract the timestep (date) from a geotif filename
-
-    INPUT
-        - tif (string) - tif file path where the filename ends with for example *2018-06.*extension*
-
-    OUTPUT
-        - timestep (string) - example 2018-06 (YYYY-MM)
-    """
-
-    # Search for the same file but for all other reflectance bands
-    # get the date from tif file name
-    filename = os.path.basename(tif)
-    # Match using regex pattern in filename
-    match = re.search(r'\d{4}-\d{2}', filename)  # date YYYY (4 digits) and MM (2 digits)
-
-    return match.group()
 
 
 def group_tifs_by_date(site_fpath, orbit):
@@ -173,6 +157,11 @@ def main(site_fpath):
 
     for orbit in orbits:
 
+        orbit_files = [file for file in os.listdir(site_fpath) if orbit in file]
+        if not orbit_files:
+            LOG.info(f"No files found with orbit '{orbit}' in {site_fpath}. Skipping to the next orbit.")
+            continue  # Skip to the next orbit if no files are found
+
         output_dir = create_dir(site_fpath, f'CrossRatio_{orbit}')
 
         grouped_tifs = group_tifs_by_date(site_fpath, orbit)
@@ -196,7 +185,7 @@ def main(site_fpath):
 
             # TODO separate per angles??
 
-            ds_cr = calc_cr(_ds, orbit, output_dir)
+            ds_cr = calc_cr(_ds)
 
             # TODO think about if 2 zones for one site
             # then will have to get the zone that is covering the largest area
@@ -242,7 +231,7 @@ def main(site_fpath):
 if __name__ == "__main__":
 
     if len(sys.argv) != 2:
-        print("Usage: python script.py <site_fpath> <output_dir>")
+        print("Usage: python script.py <site_fpath>")
     else:
-        site_directory = sys.argv[1]
+        site_directory = sys.argv[1]  # i.e. '/wp_data/sites/Degero/Sentinel/datacube/S1_GRD'
         main(site_directory)

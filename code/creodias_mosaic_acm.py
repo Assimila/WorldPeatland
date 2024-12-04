@@ -397,7 +397,7 @@ def calculate_acm(flist):
     return cprob_2d
 
 
-def create_monthly_cogs(ouputs_acm, year, month, product='S2_TOA'):
+def create_monthly_cogs(outputs_acm, year, month, product='S2_TOA'):
     """
     Create monthly DataCube COGs
     """

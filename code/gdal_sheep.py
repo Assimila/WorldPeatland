@@ -5,6 +5,10 @@ from datetime import datetime as dt
 import xarray as xr
 import subprocess
 import re
+import logging
+
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
 
 
 def gdal_dt(e):
@@ -107,10 +111,13 @@ def gdal_stack_dt(lt):
         # Check if the input is a str which would be the tif file 
         # otherwise it is already an opened gdal dataset
 
+        LOG.info(f'Currently loading {e}')
+
         if str == type(e):
             # open the Dataset
             opn = gdal.Open(e)
-
+            if opn is None:
+                raise FileNotFoundError(f'Unable to open file: {e}')
         else:
             opn = e
 
@@ -177,7 +184,8 @@ def gdal_stack_dt(lt):
     else:
         raise ValueError("No arrays to concatenate in ARRAYS_RESHAPED.")
 
-    return stacked_arr, dts, saved_opn
+    return (stacked_arr, dts,
+            saved_opn)
 
 
 def create_xarr(opn, var_name, arr, dts):
@@ -220,8 +228,8 @@ def create_coord_list(opn):
     xs = [params[0] + (params[1] * i) for i in np.arange(opn.RasterXSize)]
     ys = [params[3] + (params[5] * i) for i in np.arange(opn.RasterYSize)]
 
-    x = [params[0] + (params[1] * i) + (params[1] / 2) for i in np.arange(opn.RasterXSize)]
-    y = [params[3] + (params[5] * i) + (params[5] / 2) for i in np.arange(opn.RasterYSize)]
+    # x = [params[0] + (params[1] * i) + (params[1] / 2) for i in np.arange(opn.RasterXSize)]
+    # y = [params[3] + (params[5] * i) + (params[5] / 2) for i in np.arange(opn.RasterYSize)]
 
     return xs, ys
 

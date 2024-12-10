@@ -17,12 +17,14 @@ LOG = logging.getLogger(__name__)
 
 def create_xr(fdict):
     """
-    create_xr function takes as input asc or desc and returns an xr.Dataset with 3 data variables VV, VH, and angles
+    create_xr function takes as input asc or desc and returns a xr.Dataset with 3 data variables VV, VH, and angles
     of the input orbit.
     """
     bands = []
     stack_arr = []
     for i, j in fdict.items():
+
+        LOG.info(f'Opening tif file in xarray: {j}')
         arr, dts, opn = gdal_dt(j)
         stack_arr.append(arr)
         bands.append(i)
@@ -43,7 +45,6 @@ def create_xr(fdict):
     )
 
     return ds
-
 
 
 def apply_threshold(ds):
@@ -129,27 +130,88 @@ def group_tifs_by_date(site_fpath, orbit):
     return dict(grouped_tifs)
 
 
-def dask_smooth(in_ds, var2smooth, window, isrobust):
+def DW_smoothn_smooth_xarray(in_ds, var2smooth, window, isrobust):
     """
     Smooth a given variable in a dataset using smoothn.
+    source: Alex
 
     INPUTS:
-        - in_ds: Input xarray Dataset
-        - var2smooth: Variable to smooth
-        - window: Smoothing window parameter (s in smoothn)
-        - isrobust: Whether to use robust smoothing
+        - in_ds (xarray.Dataset): Input xarray Dataset.
+        - var2smooth (str): Name of the variable to smooth.
+        - window (float): Smoothing window parameter (s in smoothn).
+        - isrobust (bool): Whether to use robust smoothing.
 
     OUTPUTS:
-        - our_xr_ds: Smoothed xarray Dataset
+        - xarray.Dataset: A dataset containing the smoothed variable.
     """
-    smooth_ar = smoothn(y=in_ds[var2smooth].values,
-                        s=window, isrobust=isrobust, axis=0)[0]
+    print(in_ds[var2smooth].values.shape)
 
-    our_xr_ds = xr.Dataset({var2smooth: (('time', 'latitude', 'longitude'),
-                                         smooth_ar)},
-                           coords=in_ds.coords)
-    return our_xr_ds
+    # Retrieve dimensions
+    # lat_size = in_ds.dims['latitude']
+    # lon_size = in_ds.dims['longitude']
 
+    # Handle empty or all-NaN cases
+    if in_ds[var2smooth].size == 0:
+        return in_ds
+    if np.all(np.isnan(in_ds[var2smooth].values)):
+        return xr.Dataset(
+            data_vars={
+                var2smooth: (('time', 'latitude', 'longitude'), in_ds[var2smooth].values)
+            },
+            coords=in_ds.coords,
+        )
+
+    # Apply smoothn
+    smooth_ar = smoothn(y=in_ds[var2smooth].values, s=window, isrobust=isrobust, axis=0)[0]
+
+    # Return the smoothed dataset
+    return xr.Dataset(
+        data_vars={
+            var2smooth: (('time', 'latitude', 'longitude'), smooth_ar)
+        },
+        coords=in_ds.coords,
+    )
+
+
+def process_and_save_block(block, save_path, var_name, window_size, flag):
+    """
+    Smooth a single block and save it to disk.
+    """
+    smoothed_block = DW_smoothn_smooth_xarray(block, var_name, window_size, flag)
+    smoothed_block.to_netcdf(save_path)
+
+
+def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, flag, output_dir):
+    """
+    Process a large Dask dataset by splitting it into smaller spatial blocks, smoothing each block,
+    saving the results, and then recombining them.
+    """
+    latitude_chunks = range(0, dask_dataset.latitude.size, block_size)
+    longitude_chunks = range(0, dask_dataset.longitude.size, block_size)
+
+    smoothed_blocks = []
+
+    with ProgressBar():
+        for lat_start in latitude_chunks:
+            for lon_start in longitude_chunks:
+                # Define the slice for the current block
+                lat_end = min(lat_start + block_size, dask_dataset.latitude.size)
+                lon_end = min(lon_start + block_size, dask_dataset.longitude.size)
+
+                # Select the block
+                block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
+                                          longitude=slice(lon_start, lon_end))
+
+                # Smooth the block and save it
+                block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.nc"
+                process_and_save_block(block, block_path, var_name, window_size, flag)
+                smoothed_blocks.append(block_path)
+
+    # Recombine the saved blocks
+    smoothed_datasets = [xr.open_dataset(path) for path in smoothed_blocks]
+    combined = xr.combine_by_coords(smoothed_datasets)
+    LOG.info('Smoothened blocks successfully combined')
+    return combined
 
 def main(site_fpath):
 
@@ -184,8 +246,9 @@ def main(site_fpath):
             _ds = apply_threshold(ds)
 
             # TODO separate per angles??
-
+            LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
             ds_cr = calc_cr(_ds)
+            LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
 
             # TODO think about if 2 zones for one site
             # then will have to get the zone that is covering the largest area
@@ -202,29 +265,35 @@ def main(site_fpath):
         #           # Create an xarray to be able to perform smoothn
         #           arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
         #           ds = create_xarr(saved_opn, 'cr', arr, dts)
-
         # open all cross ratio tiffs and put in one xarray
         stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
+
+        LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
         ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
 
         # smoothn should happen on all the time series per orbit
         # Chunk the dataset to enable Dask computation
+        LOG.info('Begin dask chunking')
         dask_chunks = ds_all_years.chunk({"latitude": 5, "longitude": 5})
 
-        # Apply the smoothing function using map_blocks
-        # dask_output is a xarray.Dataset
-        with ProgressBar():
-            dask_output = xr.map_blocks(
-                dask_smooth,
-                dask_chunks,
-                args=('cr', 3, True)  # Pass variable name, window size, and robust flag
-            ).compute()
+        LOG.info('Begin block smoothing')
+        output_blocks_dir = create_dir(output_dir, 'output_blocks')
+        smoothed_result = process_large_dask_chunks(
+            dask_dataset=dask_chunks,
+            block_size=100,  # Spatial block size
+            var_name="cr",  # Variable to smooth
+            window_size=3,  # Smoothing window size
+            flag=True,  # Smoothing flag
+            output_dir=output_blocks_dir
+        )
 
-        dask_output.attrs['crs'] = proj4_string
+        smoothed_result.to_netcdf("smoothed_dataset.nc")
+        LOG.info('The dask chunks have been smoothened')
+        smoothed_result.attrs['crs'] = proj4_string
 
         output_ts_dir = create_dir(output_dir, 'timeSeries')
         fname = output_ts_dir + f'/cross_ratio_{orbit}_utm_smoothn.tif'
-        save_xarray_old(fname, dask_output, f'cr')
+        save_xarray_old(fname, smoothed_result, f'cr')
         LOG.info(f'Cross Ratio {orbit} Smoothened and saved here: {fname}')
 
 

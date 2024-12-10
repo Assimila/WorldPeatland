@@ -1,5 +1,10 @@
 from osgeo import gdal, osr
 from osgeo import gdal_array
+import logging
+
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
+
 
 def get_dst_dataset(dst_img, cols, rows, layers, dtype, proj, gt):
     """
@@ -121,6 +126,8 @@ def save_xarray_old(fname, xarray, data_var):
 
         # Data
         dst_band.WriteArray(_xarray[layer].data)
+
+    LOG.info('save_xarray_to_gtiff_old successful')
 
     dst_ds = None  
     

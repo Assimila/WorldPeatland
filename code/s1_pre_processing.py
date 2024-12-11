@@ -205,9 +205,12 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
                 # Smooth the block and save it
                 block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.nc"
                 process_and_save_block(block, block_path, var_name, window_size, flag)
+                LOG.info(f'{block_path} successfully saved')
                 smoothed_blocks.append(block_path)
 
+    LOG.info('Finish processing all blocks')
     # Recombine the saved blocks
+    LOG.info('Opening all smoothed blocks nc in one xarray')
     smoothed_datasets = [xr.open_dataset(path) for path in smoothed_blocks]
     combined = xr.combine_by_coords(smoothed_datasets)
     LOG.info('Smoothened blocks successfully combined')

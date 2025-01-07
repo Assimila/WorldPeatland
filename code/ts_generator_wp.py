@@ -1,6 +1,15 @@
 
-from WorldPeatland.code.downloader_wp_test import *
+from osgeo import ogr, osr
+import numpy as np
+import logging
+import os
+import sys
+import glob
+
 from TATSSI.TATSSI.time_series.generator import Generator
+
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
 
 '''ts_generator_wp 2nd script to run, it will generate time series for the MODIS data'''
 

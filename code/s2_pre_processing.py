@@ -1,16 +1,25 @@
 import os.path
-
-import yaml
-import logging
-import subprocess
-from gdal_sheep import *
-from MLEO_NN import *
-from smoothn import smoothn
-from save_xarray_to_gtiff_old import *
-from datetime import datetime as dt
+import glob
 import re
+from datetime import datetime as dt
 import rasterio
 import sys
+import pandas as pd
+import yaml
+import numpy as np
+import xarray as xr
+import subprocess
+from osgeo import gdal
+import logging
+
+from WorldPeatland.code.gdal_sheep import (gdal_stack_dt, create_coord_list, gdal_dt, create_xarr, reproject_image,
+                                           get_proj4_from_tif)
+from WorldPeatland.code.MLEO_NN import (LAI_evaluatePixelOrig, FAPAR_evaluatePixelOrig, FC_evaluatePixel,
+                                        CAB_evaluatePixel)
+from WorldPeatland.code.smoothn import smoothn
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old, save_tiff
+
+
 sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +27,6 @@ LOG = logging.getLogger(__name__)
 
 
 def get_file_name(file_path):
-    
     """
     get_file_name from the file path returns the modis data product name
     and the version 
@@ -30,69 +38,15 @@ def get_file_name(file_path):
         - file_name[0] (str) - in this case it would be the MODIS data product name
         - file_name[1] (str) - in this case it would be the MODIS data product version
     """
-    
+
     file_path_components = file_path.split('/')
     file_name = file_path_components[-1].rsplit('.', 1)
     return file_name[0], file_name[1]
 
 
-def gdal_dt(e, time):
-    '''
-    gdal_dt function will open the tif file as an osegeo gdal dataset
-    from gdal_sheep
-
-    INPUTS:
-        - e (str or tiff) - path the tiff file or the gdal dataset you want to
-            open and save its datetimes
-        - time (string) - check how the time variable is written in the tiff metadata
-    Outputs:
-        - arr (np.array) - return arr of the gdal dataset
-        - dts (list) - list of the datetimes
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
-    '''
-
-    # Create an empty list to store the datatimes
-    dts = []
-
-    # Check if the input is a str which would be the tif file
-    # otherwise it is already an opened gdal dataset
-    if type(e) == str:
-        # open the Dataset
-        opn = gdal.Open(e)
-    else:
-        opn = e
-
-    for i in range(1, opn.RasterCount + 1):
-        rst = opn.GetRasterBand(i)
-        meta = rst.GetMetadata()
-
-        # following fill in with the corresponding format
-        # 'time' check the metadata of the tiff to see what they call
-        # could also be 'RANGEBEGINNINGDATE'
-        # the time data
-        x = meta[time]
-        # also check the metadata to see how is the format of datetime data
-        # dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
-        dt_format = '%Y-%m-%d %H:%M:%S'
-        # dt_format = '%Y-%m-%d'
-        t = dt.strptime(x, dt_format)
-
-        # append it to the list
-        dts.append(t)
-
-    # save the last osegeodataset for its srs
-    saved_opn = opn
-
-    # open the array
-    arr = opn.ReadAsArray()
-
-    return arr, dts, saved_opn
-
-
 def create_ds(regrid_dict, bands):
-    
     """
-    create_ds will generate an xarray ds of all the sentinel 2 datasets and cloudmask
+    create_ds will generate a xarray ds of all the sentinel 2 datasets and cloudmask
     INPUTS:
         - bands (list) - keys of the dictionary with name of the bands
     OUTPUT:
@@ -100,24 +54,23 @@ def create_ds(regrid_dict, bands):
             of all the files in the output_dir/Sentinel (total number of variables is 16)
     """
 
-    stack, dts, opn = gdal_stack_dt(regrid_dict, 'time')
+    stack, dts, opn = gdal_stack_dt(regrid_dict)
 
     stack_list = []
     for i in regrid_dict:
-        stack, dts, opn = gdal_stack_dt(regrid_dict[i], 'time')
+        stack, dts, opn = gdal_stack_dt(regrid_dict[i])
         stack_list.append(stack)
     stack_dict = dict(zip(bands, stack_list))
 
     xs, ys = create_coord_list(opn)
 
-    ds = xr.Dataset(data_vars={i: (('time', 'latitude', 'longitude'), stack_dict[i])for i in bands},
+    ds = xr.Dataset(data_vars={i: (('time', 'latitude', 'longitude'), stack_dict[i]) for i in bands},
                     coords={'time': dts, 'latitude': ys, 'longitude': xs})
-    
+
     return ds, dts, ys, xs
 
 
 def create_dir(output_dir, directory):
-    
     """
     create_dir function will first check if the directory already exist if not it will
     create a directory where it will store the data to be downloaded
@@ -125,12 +78,12 @@ def create_dir(output_dir, directory):
     INPUTS:
         - output_dir (str/path) - specified by the user where they want the data to be downloaded
         - directory (str) - specified by each step in the code to create,
-        usually its the name of the data product to be downloaded
+        usually it's the name of the data product to be downloaded
     """
 
     # Path 
-    path = os.path.join(output_dir, directory) 
-    
+    path = os.path.join(output_dir, directory)
+
     if not os.path.exists(path):
         os.makedirs(path)
         LOG.info(f"Directory '{path}' created successfully.")
@@ -146,20 +99,19 @@ def read_config(config_fname):
     """
     with open(config_fname) as f:
         data = yaml.full_load(f)
-    
+
     # Information from the first list index 0 about the site
     start_date = data[0]['start_date']
     end_date = data[0]['end_date']
-    
+
     # Information about the first EO data product to download list index 1 
     products = data[1]['products']
     return start_date, end_date, products
 
 
 def process_MLEONN(data, config_fname, dts, ys, xs, saved_path, tile_name, data_product):
-    
     start_date, end_date, products = read_config(config_fname)
-    
+
     # 1.Smooth data using smoothn can smoothn all the biophysical parameters
     # use dask concatenate
     smoothed_data = smoothn(y=data, s=10, isrobust=True, axis=0)[0]
@@ -167,15 +119,15 @@ def process_MLEONN(data, config_fname, dts, ys, xs, saved_path, tile_name, data_
     # 2.Create xarray to be able to interpolate in function of time 
     ds = xr.Dataset(data_vars={f'{data_product}_smooth': (('time', 'latitude', 'longitude'), smoothed_data)},
                     coords={'time': dts, 'latitude': ys, 'longitude': xs})
-    
+
     # 3.Perform linear interpolation
-    ds_linear = ds.interp(coords={'time': pa.date_range(start_date, end_date, freq='1D')}, method='linear')
-    
+    ds_linear = ds.interp(coords={'time': pd.date_range(start_date, end_date, freq='1D')}, method='linear')
+
     # 4.Set CRS attribute
-    #TODO get the proj4 str from the tif
+    # TODO get the proj4 str from the tif
     proj4_utm = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs'
     ds_linear.attrs['crs'] = proj4_utm
-    
+
     # 5.Save as utm TIFF
     output_utm = os.path.join(saved_path, f'{data_product}_{tile_name}_smoothn_utm.tif')
     save_xarray_old(output_utm, ds_linear, f'{data_product}_smooth')
@@ -190,10 +142,9 @@ def process_MLEONN(data, config_fname, dts, ys, xs, saved_path, tile_name, data_
     dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
     ds = dsReprj = None  # close the files
     LOG.info(f'{data_product}_resampled and saved')
-        
+
     # 8.Delete UTM files
     os.remove(output_utm)
-
 
 
 def get_timestep_from_tif(tif):
@@ -220,7 +171,7 @@ def get_bands_SR_in_arrays(bd, tif, opn, month_tif, input_dict):
     """
     1. Get the surface reflectance bands (other than B2 SR)
     2. regrid to 10 m pixel resolution
-    3. put the surface reflectance in arraqys + multiply by scaling factor
+    3. put the surface reflectance in arrays + multiply by scaling factor
     4. add to input_dict
 
     OUTPUT
@@ -298,14 +249,11 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
     input_dict['saa'] = saa
     input_dict['sza'] = sza
 
-    # process MLEONN as one timestep per rasterband
+    # process MLEONN as one timestep per raster band
     lai = LAI_evaluatePixelOrig(input_dict)
     fapar = FAPAR_evaluatePixelOrig(input_dict)
     fc = FC_evaluatePixel(input_dict)
     cab = CAB_evaluatePixel(input_dict)
-
-    # Export the one timestep (one 2d array) of B8 and saa needed in for the dark pixels selection
-    B8_arr = input_dict['B8']
 
     # Empty the input_dict
     input_dict = None
@@ -315,14 +263,16 @@ def prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_product
     MLEONN_products_dict['fapar'].append(fapar)
     MLEONN_products_dict['fc'].append(fc)
     MLEONN_products_dict['cab'].append(cab)
+    LOG.info(f'MLEONN four products successfully formed')
+    return MLEONN_products_dict, angular_dict
 
-    return MLEONN_products_dict, B8_arr, angular_dict
+
 def create_monthly_cogs(product, S2_path, timestep, opn, dts, month_tif, MLEONN_products_dict):
     """
     Create cog monthly tiffs for the MLEONN products created
     1. stack the arrays all the days available with the month
-    2. Create an xarray
-    3. Get the crs proj-4 fromt he downloaded initial S2 B2 monthly tif
+    2. Create a xarray
+    3. Get the crs proj-4 fromt the downloaded initial S2 B2 monthly tif
     4. save the xarray as tif
     """
 
@@ -339,7 +289,7 @@ def create_monthly_cogs(product, S2_path, timestep, opn, dts, month_tif, MLEONN_
     output_cog_fname = os.path.join(output_dir, output_cog_fname)
 
     # create an xarray for each MLEONN product
-    xr = create_xarr(opn, product, stacked_arr, dts)
+    x_array = create_xarr(opn, product, stacked_arr, dts)
 
     # get crs or the proj4 str from the monthly-tif using the command line of gdalinfo
     command = ['gdalinfo', month_tif, '-proj4']
@@ -348,33 +298,78 @@ def create_monthly_cogs(product, S2_path, timestep, opn, dts, month_tif, MLEONN_
     proj4_match = re.search(r"PROJ\.4 string is:\n'(.*?)'", result.stdout)
     proj4_string = proj4_match.group(1)
     # set proj4 str as an attribute to the xarray so that it can be saved as a tiff
-    xr.attrs['crs'] = proj4_string
+    x_array.attrs['crs'] = proj4_string
 
     # edited version of save_xarray_to_gtiff
-    save_tiff(output_cog_fname, xr, product)
+    save_tiff(output_cog_fname, x_array, product)
+    LOG.info(f'COG successfully saved {output_cog_fname}')
 
     return output_cog_fname
 
 
-def main(S2_path):
+def directional_distance_transform(is_cloud, saa, max_distance):
+    """
+    Projects distances from clouds in a specific direction.
+
+    Parameters:
+    is_cloud (np.ndarray): Binary mask where clouds are marked with 1 and non-clouds with 0.
+    saa (float): Solar Azimuth Angle - direction in degrees (0-360) where 0 is North.
+    max_distance (int): Maximum distance to project.
+
+    Returns:
+    np.ndarray: Distance transform array.
+    """
+    # Convert azimuth to radians
+    azimuth_rad = np.deg2rad(90 - saa)
+
+    # Calculate the direction vector
+    dx = np.sin(azimuth_rad)
+    dy = np.cos(azimuth_rad)
+
+    # Initialize the distance transform array
+    distance_transform = np.full(is_cloud.shape, np.inf)
+
+    # Get the indices of cloud pixels
+    cloud_indices = np.argwhere(is_cloud.data == 1)
+
+    for y, x in cloud_indices:
+        for d in range(1, max_distance + 1):
+            # Calculate the new position
+            new_x = int(round(x + d * dx))
+            new_y = int(round(y + d * dy))
+
+            # Check if the new position is within bounds
+            if 0 <= new_x < is_cloud.shape[1] and 0 <= new_y < is_cloud.shape[0]:
+                distance_transform[new_y, new_x] = min(distance_transform[new_y, new_x], d)
+
+    # Replace inf with 0 for non-cloud areas
+    distance_transform[np.isinf(distance_transform)] = 0
+
+    return distance_transform
+
+
+def main(site_dir):
+
+    s2_path = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR')
+    LOG.info(f'Start of Processing of {s2_path}')
 
     # Path to B02 datacube tiff files
-    B02_path = os.path.join(S2_path, 'B2')
-
+    pattern = os.path.join(s2_path, 'B2', '*.tif')
     # get B02 monthly tif files
-    B02_tif_files_list = glob.glob(os.path.join(B02_path, '*.tif'))
+    B2_tif_files_list = glob.glob(pattern)
 
     # Set reflectance bands list
     bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11', 'B12']
 
-    for month_tif in B02_tif_files_list:
-
+    for month_tif in B2_tif_files_list:
         # extract timestep from the filename
         timestep = get_timestep_from_tif(month_tif)
+        LOG.info(f'Starting processing this timestep: {timestep}')
+        # list of all SR bands tiffs for the same month
         reflectance_tifs = []
         for band in bands:
-            search_pattern = os.path.join(S2_path, '**', band, f'*{timestep}*.tif')
-            reflectance_tifs.extend(glob.glob(search_pattern, recursive=True))
+            pattern = os.path.join(s2_path, band, f'*{timestep}*.tif')
+            reflectance_tifs.extend(glob.glob(pattern, recursive=True))
 
         # Open the monthly B02 tif file
         opn = gdal.Open(month_tif)
@@ -394,25 +389,22 @@ def main(S2_path):
             MLEONN_products_dict[product] = []
         # Datetime empty list
         dts = []
-        # Create an empty list to append the in month single days of B8 and saa
-        B8_list = []
+        # Create an empty list to append the in month single days saa
         angular_list = []
 
         # Now loop over each timestep in this month, loop over each raster in the tif
         # in this case bd as band meaning a 2d raster or one timestep and not reflectance bands
-        for bd in range(opn.RasterCount):
-            bd += 1  # gdal starts raster band count from 1
-            ######### PREPARE INPUT BAND SR AND RUN MLEONN ###############
-            MLEONN_products_dict, B8_arr, angular_dict = prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs, MLEONN_products_dict)
-            B8_list.append(B8_arr)
+        for bd in range(1, opn.RasterCount + 1):  # gdal starts raster band count from 1
+            # PREPARE INPUT BAND SR AND RUN MLEONN
+            LOG.info('MLEONN process starting')
+            MLEONN_products_dict, angular_dict = prepare_run_MLEONN(bd, opn, month_tif, dts, reflectance_tifs,
+                                                                    MLEONN_products_dict)
             angular_list.append(angular_dict)
-        # this is descaled B8 array
-        B8_arr = np.stack(B8_list, axis=0)
 
         # empty dictionary  to store outputs file names
         outputs = {}
         for product in MLEONN_products_name:
-            output_cog_fname = create_monthly_cogs(product, S2_path, timestep,
+            output_cog_fname = create_monthly_cogs(product, s2_path, timestep,
                                                    opn, dts, month_tif, MLEONN_products_dict)
 
             # If the product key is not already in the outputs dictionary, initialize it with an empty list
@@ -421,134 +413,70 @@ def main(S2_path):
             # Append the output filename to the corresponding product key
             outputs[product].append(output_cog_fname)
 
-       ################ Cloud bands ##############
+        # Create cloud mask
 
-        # Get the TOA cloud probability corresponding month cog
-        # Search the TOA path
-        toa_path = S2_path.replace('/MSIL2A/', '/MSIL1C/')
-        toa_path = toa_path.replace('/S2_SR', '/S2_TOA/')
-        search_pattern = os.path.join(toa_path, 'ACM', f'*{timestep}*.tif')
-        # cprob has a 10m pixel resolution
-        cprob_path = glob.glob(search_pattern, recursive=True)[0]
-        cprob_arr, dts, saved_opn = gdal_dt(cprob_path, 'time')
-
-        # Set a cloud probability threshold
-        cld_prb_thresh = 0.5
-        # apply the mask 1 for cprob >= 0.5 not cloudy is set as 0
-        # pixel is cloud == 1
-        is_clouds = np.where(cprob_arr >= cld_prb_thresh, 1, 0)
-
-        ########## Shadow bands ##########
-
-        # Create a non-water array based on SCL values (6 is water pixel)
-        # Get the SCL corresponding month tif
-        search_pattern = os.path.join(S2_path, '**', 'SCL', f'*{timestep}*.tif')
-        SCL_path = glob.glob(search_pattern, recursive=True)[0]
-        # regrid SCL to B2 10m pixel resolution
-        SCL_gdalobj = reproject_image(SCL_path, month_tif)
-        SCL_arr = SCL_gdalobj.ReadAsArray()
-
-        # water class is 6 in SCL
-        water_class = 6
-        # if the pixel is water(=6) set the pixel as 1 (True)
-        # if pixel not water then it is 0
-        not_water = np.where(SCL_arr == water_class, 1, 0)
-
-        # Set Potential Dark pixels
-        # Get B8_arr already previously descaled corresponding month tif (NIR)
+        LOG.info(f'Cloud mask processing started')
+        # Set thresholds
+        CLD_PRB_THRESH = 0.5
         # NIR dark pixel reflectance threshold is set to 0.15 already descaled
-        nir_drk_thresh = 0.15
-        # 1 is a potentially dark pixel and 0 otherwise
-        #TODO is this correct? NIR reflectance of less than the threshold is dark pixel?
-        dark_pixels = np.where(B8_arr < nir_drk_thresh, 1, 0)
-        # set water pixel to 0 in dark_pixels
-        # dark_pixels = np.where(not_water == 1, 0, dark_pixels)
-        # Now dark_pixels contains 1 for potentially dark pixels (excluding water) and 0 otherwise
+        NIR_DRK_THRESH = 0.25
+        maxDis = 150
 
-        # Create the saa_arr from the list of angular_dict
-        saa_arr = []
-        for ang_dict in angular_list:
-            saa_value = ang_dict['saa']
-            saa_array = np.full(B8_arr[0].shape, saa_value)
-            saa_arr.append(saa_array)
+        # Reproject SCL layer once per timestep
+        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'SCL', f'*{timestep}.tif')
+        fname = glob.glob(pattern)[0]
+        # Resample the SCL band (downscaling the SCL band pixel originally 60m to 20m)
+        SCL_gdalobj = reproject_image(fname, month_tif)
+        SCL_resampled = SCL_gdalobj.ReadAsArray()  # array dtype=uint8
+        water_class = 6
+        water_pixels = (SCL_resampled == water_class)
 
-        saa_arr = np.array(saa_arr)
-        # Determine the direction to project cloud shadow from clouds (assumes UTM projection)
-        shadow_azimuth = 90 - saa_arr
-        # Ensure the values are in the range of 0° to 360°
-        #TODO should this be done to avoid negative values?
-        shadow_azimuth = np.mod(shadow_azimuth, 360)
+        if water_pixels.ndim == 2:
+            water_pixels = water_pixels[np.newaxis, :]
 
+        water_pixels = create_xarr(opn, 'boolean', water_pixels, dts)
 
-        # def project_cloud_mask(opn, bd, angular_list, is_clouds, elevation):
-        #     """
-        #     Projects the cloud mask to the ground level assuming some cloud height and using the sun and view angles.
-        #     Reference code:
-        #     https://github.com/sentinel-hub/eo-learn-examples/blob/main/AgriDataValue/cloud-shadows-projection/utils.py
-        #
-        #     INPUTS
-        #     - opn (gdal object) - containing the xres and yres of the Sentinel-2 (best to take the reference img B02)
+        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'B8', f'*{timestep}.tif')
+        fname = glob.glob(pattern)[0]
 
-        #
-        #     OUTPUTS
-        #
-        #     """
+        arr, dts, saved_opn = gdal_dt(fname)
+        b8 = create_xarr(opn, 'boolean', arr, dts)
+        b8 = b8 / 10000.0  # apply scaling factor
 
-        # Get image resolution height and width of a pixel
-        geo = opn.GetGeoTransform()
-        # number of rows and cols
-        # width is the number of cols along the xaxis
-        # and height is the number of rows along the yaxis
-        width, height = opn.RasterXSize, opn.RasterYSize
-        xmin = min(geo[0], geo[0] + width * geo[1])
-        ymax = max(geo[3], geo[3] + height * geo[5])
-        xRes, yRes = abs(geo[1]), abs(geo[5])
+        pattern = os.path.join(site_dir, 'MSIL1C', 'datacube', 'S2_TOA', 'cprob', f'*{timestep}.tif')
+        fname = glob.glob(pattern)[0]
+        arr, dts, saved_opn = gdal_dt(fname)
+        cloud_probability = create_xarr(opn, 'boolean', arr, dts)
 
-        for t_idx in range(opn.RasterCount):
-            # Average Solar and Viewing angles from Degrees to Radians
-            sZ = angular_list[t_idx]['sza'] * np.pi / 180
-            sA = angular_list[t_idx]['saa'] * np.pi / 180
-            vZ = angular_list[t_idx]['vza'] * np.pi / 180
-            vA = angular_list[t_idx]['vaa'] * np.pi / 180
+        is_cloud = (cloud_probability > CLD_PRB_THRESH).astype(bool)
+        dark_pixels = (b8 < NIR_DRK_THRESH).astype(bool)
 
-            # Get the indices of the pixels where clouds are present and convert them to CRS coordinates. If only the
-            # condition is provided, numpy.where() will return the indices of elements where the condition is true.
-            rows_c, cols_c = np.where(is_clouds[t_idx])
-            xc = xmin + (cols_c * xRes)  # xmin of bottom left
-            yc = ymax - (rows_c * yRes)  # ymax of top right
+        # get angular information from B2 in band metadata
+        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'B2', f'*{timestep}.tif')
+        fname = glob.glob(pattern)[0]
 
-            elevation = 500
-            # project the cloud mask to the ground level in CRS coordinates
-            xs = xc - elevation * (-np.tan(vZ) * np.sin(vA) + np.tan(sZ) * np.sin(sA))
-            ys = yc - elevation * (np.tan(vZ) * np.cos(vA) + np.tan(sZ) * np.cos(sA))
+        dataset = gdal.Open(fname)
+        band = dataset.GetRasterBand(bd)
+        metadata = band.GetMetadata()  # metadata is a dict
+        saa = metadata.get("saa", "No 'saa' metadata found")
+        saa = float(saa)
 
-            # Filter out NaN values
-            #TODO why we need this ? does it work?
-            # nan_mask = np.isnan(xs) | np.isnan(ys)  # in xs or ys
-            # xc, yc, xs, ys = [array[~nan_mask] for array in [xc, yc, xs, ys]]
+        distance_transform = (directional_distance_transform(is_cloud.boolean.values, saa, maxDis) > 0).astype(bool)
+        shadows = dark_pixels * distance_transform
 
-            # convert the CRS coordinates back to pixel indices
-            # cols_s = (np.round(xs - xmin, decimals=-1) / xRes).astype(int)
-            # rows_s = (np.round(ymax - ys, decimals=-1) / yRes).astype(int)
-            cols_s = ((xs - xmin) / xRes).astype(int)
-            rows_s = ((ymax - ys) / yRes).astype(int)
+        # Create cloud mask logic using the water_pixels for the current inband timestep
+        cloud_mask = (is_cloud | shadows) & ~water_pixels
+        LOG.info(f'Cloud mask successfully formed for {timestep}')
 
-            # filter out-of-bounds values
-            out_of_bounds = (cols_s < 0) | (cols_s >= width) | (rows_s < 0) | (rows_s >= height)
-            cols_s = cols_s[~out_of_bounds]
-            rows_s = rows_s[~out_of_bounds]
-
-            # create the cloud shadow mask
-            shadow_mask = np.zeros_like(is_clouds[t_idx])
-            shadow_mask[(rows_s, cols_s)] = 1
-
-            shadow_mask_3d = shadow_mask.reshape((1, height, width))
-            save_3d_masks(shadow_mask_3d, opn, F'/wp_data/sites/Degero/Sentinel/test/degero_shadow_mask_{elevation}_2018-03.tif')
-
-
-
-
-
+        # Add crs to xarray
+        proj4_string = get_proj4_from_tif(month_tif)
+        cloud_mask.attrs['crs'] = proj4_string
+        path = os.path.join(site_dir, 'MSIL2A', 'datacube', 'MLEONN')
+        output_dir = create_dir(path, f'cloud_mask')
+        LOG.info(f'Saving tif here: {output_dir}')
+        fname_cloud_mask = os.path.join(output_dir, f'cloud_mask_{timestep}.tif')
+        save_xarray_old(fname_cloud_mask, cloud_mask, f'boolean')
+        LOG.info(f'tif successfully saved!')
 
         # Apply mask can be done after creating MLEONN products
         # # apply mask before scale factor to not change the acm_mask 1 and 999 values
@@ -557,24 +485,16 @@ def main(S2_path):
         # threshold = 20
         # ds_masked = ds.where(ds['MSK_CLDPRB_20m'].values <= threshold, np.nan)
         #
-        #     # # create an xarray for the month containing all bands
+        #     # # create a xarray for the month containing all bands
         #     ds, dts, ys, xs = create_ds(input_dict, band_names)
 
 
-    # get config file name for the site and read start and end date
-    # config_fname = glob.glob(f'{output_dir}{tile_name}/*.yml')[0]
-    # process_MLEONN(lai, config_fname, dts, ys, xs, saved_path, tile_name, 'lai')
-    # process_MLEONN(fapar, config_fname, dts, ys, xs, saved_path, tile_name, 'fapar')
-    # process_MLEONN(fc, config_fname, dts, ys, xs, saved_path, tile_name, 'fc')
-    # process_MLEONN(cab, config_fname, dts, ys, xs, saved_path, tile_name, 'cab')
-
-
 if __name__ == "__main__":
-    
+
     if len(sys.argv) != 2:
-        print("Usage: python script.py <S2_path>")  # the user has to input one argument
+        print("Usage: python script.py <site_dir>")  # the user has to input one argument
     else:
         # location of the second item in the list
         # Sentinel 2 folder path where all bands folders are
-        S2_path = sys.argv[1]
-        main(S2_path)
+        site_dir = sys.argv[1]
+        main(site_dir)

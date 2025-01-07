@@ -1,5 +1,6 @@
 from osgeo import gdal, osr
 from osgeo import gdal_array
+import dask.array as da
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -124,8 +125,15 @@ def save_xarray_old(fname, xarray, data_var):
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
 
-        # Data
-        dst_band.WriteArray(_xarray[layer].data)
+        # Check if data is a Dask array
+        if isinstance(_xarray[layer].data, da.Array):
+            # Compute the dask array to convert it into a Numpy array
+            data_to_write = _xarray[layer].data.compute()
+        else:
+            data_to_write = _xarray[layer].data
+
+        # Write the data to the gdal band
+        dst_band.WriteArray(data_to_write)
 
     LOG.info('save_xarray_to_gtiff_old successful')
 

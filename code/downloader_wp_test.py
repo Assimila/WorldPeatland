@@ -3,18 +3,20 @@ import json
 import logging
 import shutil
 import sys
+import os
+from osgeo import ogr
+import glob
+import subprocess
+import yaml
 from datetime import datetime, timedelta
 from urllib.error import HTTPError
 from urllib.request import urlretrieve
-
-import yaml
-from tqdm import *
+from tqdm import tqdm
 
 sys.path.append('/workspace/TATSSI')
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
-
 # Sentinel Downloaders
-from WorldPeatland.code.SentinelDownloader import *
+from WorldPeatland.code.SentinelDownloader import SentinelDownloader
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)

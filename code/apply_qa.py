@@ -1,12 +1,22 @@
-from WorldPeatland.code.downloader_wp_test import *
+
+import json
 import collections
+import glob
+from datetime import datetime
+import os
+import logging
+from WorldPeatland.code.downloader_wp_test import create_dir, read_config
+
 from TATSSI.TATSSI.notebooks.helpers.qa_analytics import Analytics
 # from TATSSI.notebooks.helpers.utils import *
-from TATSSI.TATSSI.input_output.utils import *
+from TATSSI.TATSSI.input_output.utils import save_dask_array
 from TATSSI.TATSSI.notebooks.helpers.time_series_interpolation import \
     TimeSeriesInterpolation
 
 import sys
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
+
 
 sys.path.append('/workspace/TATSSI/')
 sys.path.insert(0, '/workspace/WorldPeatland/code/')

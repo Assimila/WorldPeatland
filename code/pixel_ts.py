@@ -1,9 +1,13 @@
 
 from glob import glob
-
-from WorldPeatland.code.downloader_wp_test import *
-from WorldPeatland.code.gdal_sheep import *
-from WorldPeatland.code.save_xarray_to_gtiff_old import *
+import os
+import sys
+from datetime import datetime as dt
+import logging
+from osgeo import gdal
+from WorldPeatland.code.downloader_wp_test import create_dir, read_config
+from WorldPeatland.code.gdal_sheep import create_xarr
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)

@@ -6,11 +6,12 @@ from osgeo import ogr
 import tempfile
 from pathlib import Path
 import pandas as pd
+import numpy as np
 from lightgbm import Booster
 import json
 from pyproj import Transformer
 from calendar import monthrange
-from gdal_sheep import *
+from gdal_sheep import reproject_image, create_xarr
 from save_xarray_to_gtiff_old import *
 import pickle
 import sys

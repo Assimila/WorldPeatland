@@ -10,9 +10,9 @@ import logging
 import sys
 
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, gdal_stack_dt
+from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, gdal_stack_dt, get_proj4_from_tif
 from WorldPeatland.code.utils import create_dir, get_timestep_from_tif
-from smoothn import smoothn
+from WorldPeatland.code.smoothn import smoothn
 
 
 sys.path.insert(0, '/workspace/WorldPeatland/code/')
@@ -150,11 +150,6 @@ def dw_smoothn_smooth_xarray(in_ds, var2smooth, window, isrobust):
     OUTPUTS:
         - xarray.Dataset: A dataset containing the smoothed variable.
     """
-    print(in_ds[var2smooth].values.shape)
-
-    # Retrieve dimensions
-    # lat_size = in_ds.dims['latitude']
-    # lon_size = in_ds.dims['longitude']
 
     # Handle empty or all-NaN cases
     if in_ds[var2smooth].size == 0:
@@ -196,24 +191,22 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     longitude_chunks = range(0, dask_dataset.longitude.size, block_size)
 
     smoothed_blocks = []
-    # REMOVE
-    smoothed_blocks = glob.glob(f'/wp_data/sites/HatfieldThorne/Sentinel/datacube/S1_GRD/CrossRatio_ASCENDING/output_blocks/*.nc')
-    # with ProgressBar():
-    #     for lat_start in latitude_chunks:
-    #         for lon_start in longitude_chunks:
-    #             # Define the slice for the current block
-    #             lat_end = min(lat_start + block_size, dask_dataset.latitude.size)
-    #             lon_end = min(lon_start + block_size, dask_dataset.longitude.size)
-    #
-    #             # Select the block
-    #             block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
-    #                                       longitude=slice(lon_start, lon_end))
-    #
-    #             # Smooth the block and save it
-    #             block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.nc"
-    #             process_and_save_block(block, block_path, var_name, window_size, flag)
-    #             LOG.info(f'{block_path} successfully saved')
-    #             smoothed_blocks.append(block_path)
+    with ProgressBar():
+        for lat_start in latitude_chunks:
+            for lon_start in longitude_chunks:
+                # Define the slice for the current block
+                lat_end = min(lat_start + block_size, dask_dataset.latitude.size)
+                lon_end = min(lon_start + block_size, dask_dataset.longitude.size)
+
+                # Select the block
+                block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
+                                          longitude=slice(lon_start, lon_end))
+
+                # Smooth the block and save it
+                block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.nc"
+                process_and_save_block(block, block_path, var_name, window_size, flag)
+                LOG.info(f'{block_path} successfully saved')
+                smoothed_blocks.append(block_path)
 
     LOG.info('Finish processing all blocks')
     # Recombine the saved blocks
@@ -242,33 +235,33 @@ def main(site_fpath):
 
         monthly_outputs = []
 
-        # for timestep, files in grouped_tifs.items():
-        #
-        #     # Create the dictionary from files to stack and concatenate the datasets in xarray format
-        #     files_dict = {}
-        #     for file in files:
-        #         if "VV" in file:
-        #             files_dict["VV"] = file
-        #         elif "VH" in file:
-        #             files_dict["VH"] = file
-        #         elif "angle" in file:
-        #             files_dict["angle"] = file
-        #
-        #     ds = create_xr(files_dict)
-        #     _ds = apply_threshold(ds)
-        #
-        #     # TODO separate per angles??
-        #     LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
-        #     ds_cr = calc_cr(_ds)
-        #     LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
-        #
-        #     # TODO think about if 2 zones for one site
-        #     # then will have to get the zone that is covering the largest area
-        #     proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
-        #
-        #     output_utm = output_dir + f'/cross_ratio_{orbit}_utm_{timestep}.tif'
-        #     monthly_outputs.append(output_utm)
-        #     save_xarray_old(output_utm, ds_cr, 'cr')
+        for timestep, files in grouped_tifs.items():
+
+            # Create the dictionary from files to stack and concatenate the datasets in xarray format
+            files_dict = {}
+            for file in files:
+                if "VV" in file:
+                    files_dict["VV"] = file
+                elif "VH" in file:
+                    files_dict["VH"] = file
+                elif "angle" in file:
+                    files_dict["angle"] = file
+
+            ds = create_xr(files_dict)
+            _ds = apply_threshold(ds)
+
+            # TODO separate per angles??
+            LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
+            ds_cr = calc_cr(_ds)
+            LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
+
+            # TODO think about if 2 zones for one site
+            # then will have to get the zone that is covering the largest area
+            proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
+
+            output_utm = output_dir + f'/cross_ratio_{orbit}_utm_{timestep}.tif'
+            monthly_outputs.append(output_utm)
+            save_xarray_old(output_utm, ds_cr, 'cr')
 
             # # change projection from utm to sinusoidal
             #       output_sinu = transform_save(ds_cr, orbit, saved_path)
@@ -277,11 +270,6 @@ def main(site_fpath):
             #       # Create a xarray to be able to perform smoothn
             #       arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
             #       ds = create_xarr(saved_opn, 'cr', arr, dts)
-
-
-        # REMOVE
-        monthly_outputs = glob.glob(f'/wp_data/sites/HatfieldThorne/Sentinel/datacube/S1_GRD/CrossRatio_ASCENDING/*.tif')
-        proj4_string = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs'
 
         # open all cross ratio tiffs and put in one xarray
         stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)

@@ -215,6 +215,10 @@ def create_xarr(opn, var_name, arr, dts):
 
     variable_name = var_name
 
+    # Check if arr is 2D make it 3D to fit the time dimension
+    if arr.ndim == 2:
+        arr = arr[np.newaxis, :]
+
     ds = xr.Dataset(data_vars={variable_name: (('time', 'latitude', 'longitude'), arr)},
                     coords={'time': dts,
                             'latitude': ys,

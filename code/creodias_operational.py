@@ -12,6 +12,13 @@ from calendar import monthrange
 import xml.etree.ElementTree as ET
 import pickle
 import sys
+import logging
+
+from WorldPeatland.code.utils import create_dir
+
+sys.path.append('/workspace/TATSSI')
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
 
 
 def transform_coordinate(x: float, y: float,
@@ -42,6 +49,7 @@ def get_extent(fname):
     Get extent from GeoJSON file as:
     xmin, xmax, ymin, ymax
     """
+    LOG.info(f'Getting extent of {fname}')
     d = ogr.Open(fname)
     l = d.GetLayer()
     return l.GetExtent()
@@ -62,15 +70,6 @@ def get_polygon(fname):
     polygon = polygon[0:-2]
 
     return polygon
-
-
-def create_dir(path):
-    """
-    Create directory
-    """
-    os.makedirs(path, exist_ok=True)
-
-    return None
 
 
 def get_spatial_reference(img_path):
@@ -135,9 +134,7 @@ def create_subset(input_dirs, output_dir, extent, band):
         fname = glob(input_dirs[i])
         if len(fname) > 0:
             input_dirs[i] = fname[0]
-        # TODO Check that files exist
 
-    create_dir(output_dir)
     if band == 'MSK_CLDPRB_20m':
         _fname = os.path.basename(str(Path(input_dirs[0]).parent.parent.absolute()))
         output_fname = f'{_fname}_{band}'
@@ -201,7 +198,8 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
                 else:
                     img_path = f'GRANULE/*/*_DATA/{dataset}/*{band}*.jp2'
                 output_dir = os.path.join(OUTPUTDIR, 'datacube',
-                                          product, band, 'VRTs')
+                                          product, band)
+                output_dir = create_dir(output_dir, 'VRTs')
 
                 images_path = []
                 for i in range(len(images)):
@@ -336,7 +334,7 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
 
         tmp_ds = gdal.Translate(output_cog_fname, output_vrt_fname,
                                 options=translate_options)
-
+        LOG.info(f'COG {output_cog_fname} successfully saved')
         # Clean tmp variables
         del tmp_ds
         del f
@@ -356,16 +354,11 @@ def main(geojson_fname, OUTPUT_DIR):
                 'QI_DATA': ['MSK_CLDPRB_20m']}
 
     cloud_cover_le = 30
-
-    #OUTPUTDIR = '/wp_data/sites/Degero/Sentinel/MSIL2A'
-    OUTPUTDIR = os.path.join(OUTPUT_DIR, 'MSIL2A')
-    create_dir(OUTPUTDIR)
+    OUTPUTDIR = create_dir(OUTPUT_DIR, 'MSIL2A')
 
     # Create a file to store the sensing dates pickle files
-    OUTPUTDIR_sensing_dates = os.path.join(OUTPUT_DIR, 'sensing_dates')
-    create_dir(OUTPUTDIR_sensing_dates)
+    OUTPUTDIR_sensing_dates = create_dir(OUTPUT_DIR, 'sensing_dates')
 
-    #geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
     extent = get_extent(geojson_fname)
     polygon = get_polygon(geojson_fname)
 
@@ -387,6 +380,8 @@ def main(geojson_fname, OUTPUT_DIR):
 
     for year in range(2017, 2023 + 1):
         for month in range(1, 12 + 1):
+            LOG.info(f'Getting MSIL2A data for {year}-{month}')
+
             start_date = f'{year}-{month:02}-01T00:00:00.000Z'
             end_day = monthrange(year, month)[1]
             end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
@@ -417,7 +412,6 @@ def main(geojson_fname, OUTPUT_DIR):
                     sensing_dates.append(sensing_date)
                     S3Paths.append(element['S3Path'])
 
-
                 new_dir = os.path.join(OUTPUTDIR, image_name)
                 try:
                     os.symlink(element['S3Path'], new_dir,
@@ -436,7 +430,6 @@ def main(geojson_fname, OUTPUT_DIR):
                     pickle.dump(sensing_dates, file)
             else:
                 continue
-
 
             # Create daily VRTs
             outputs = create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, end_day, extent)

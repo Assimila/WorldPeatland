@@ -21,6 +21,7 @@ import os
 import rioxarray
 
 from WorldPeatland.code.save_xarray_to_gtiff import save_xarray
+from WorldPeatland.code.smoothn import smoothn
 
 class MLEO_operator():
     
@@ -759,12 +760,12 @@ degToRad = np.pi / 180
 def LAI_evaluatePixelOrig(in_bd):
     
     global degToRad
-    
-    b03_norm = normalize(in_bd['B3'], 0, 0.253061520471542)
-    b04_norm = normalize(in_bd['B4'], 0, 0.290393577911328)
-    b05_norm = normalize(in_bd['B5'], 0, 0.305398915248555)
-    b06_norm = normalize(in_bd['B6'], 0.006637972542253, 0.608900395797889)
-    b07_norm = normalize(in_bd['B7'], 0.013972727018939, 0.753827384322927)
+    # Creodias stores band name with a 0 B03 not B3 so manually changed this in MLEONN
+    b03_norm = normalize(in_bd['B03'], 0, 0.253061520471542)
+    b04_norm = normalize(in_bd['B04'], 0, 0.290393577911328)
+    b05_norm = normalize(in_bd['B05'], 0, 0.305398915248555)
+    b06_norm = normalize(in_bd['B06'], 0.006637972542253, 0.608900395797889)
+    b07_norm = normalize(in_bd['B07'], 0.013972727018939, 0.753827384322927)
     b8a_norm = normalize(in_bd['B8A'], 0.026690138082061, 0.782011770669178)
     b11_norm = normalize(in_bd['B11'], 0.016388074192258, 0.493761397883092)
     b12_norm = normalize(in_bd['B12'], 0, 0.493025984460231)
@@ -903,11 +904,11 @@ def FAPAR_evaluatePixelOrig(sample):
     
     global degToRad
     
-    b03_norm = normalize(sample['B3'] , 0, 0.253061520471542)
-    b04_norm = normalize(sample['B4'], 0, 0.290393577911328)
-    b05_norm = normalize(sample['B5'], 0, 0.305398915248555)
-    b06_norm = normalize(sample['B6'], 0.006637972542253, 0.608900395797889)
-    b07_norm = normalize(sample['B7'], 0.013972727018939, 0.753827384322927)
+    b03_norm = normalize(sample['B03'] , 0, 0.253061520471542)
+    b04_norm = normalize(sample['B04'], 0, 0.290393577911328)
+    b05_norm = normalize(sample['B05'], 0, 0.305398915248555)
+    b06_norm = normalize(sample['B06'], 0.006637972542253, 0.608900395797889)
+    b07_norm = normalize(sample['B07'], 0.013972727018939, 0.753827384322927)
     b8a_norm = normalize(sample['B8A'], 0.026690138082061, 0.782011770669178)
     b11_norm = normalize(sample['B11'], 0.016388074192258, 0.493761397883092)
     b12_norm = normalize(sample['B12'], 0, 0.493025984460231)
@@ -1034,11 +1035,11 @@ def FAPAR_layer2(neuron1, neuron2, neuron3, neuron4, neuron5):
 
 
 def FC_evaluatePixel(in_bd):
-    b03_norm = normalize(in_bd['B3'], 0, 0.253061520472)
-    b04_norm = normalize(in_bd['B4'], 0, 0.290393577911)
-    b05_norm = normalize(in_bd['B5'], 0, 0.305398915249)
-    b06_norm = normalize(in_bd['B6'], 0.00663797254225, 0.608900395798)
-    b07_norm = normalize(in_bd['B7'], 0.0139727270189, 0.753827384323)
+    b03_norm = normalize(in_bd['B03'], 0, 0.253061520472)
+    b04_norm = normalize(in_bd['B04'], 0, 0.290393577911)
+    b05_norm = normalize(in_bd['B05'], 0, 0.305398915249)
+    b06_norm = normalize(in_bd['B06'], 0.00663797254225, 0.608900395798)
+    b07_norm = normalize(in_bd['B07'], 0.0139727270189, 0.753827384323)
     b8a_norm = normalize(in_bd['B8A'], 0.0266901380821, 0.782011770669)
     b11_norm = normalize(in_bd['B11'], 0.0163880741923, 0.493761397883)
     b12_norm = normalize(in_bd['B12'], 0, 0.49302598446)
@@ -1168,11 +1169,11 @@ def FC_layer2(neuron1, neuron2, neuron3, neuron4, neuron5):
 
 def CAB_evaluatePixel(in_bd):
 
-    b03_norm = normalize(in_bd['B3'], 0, 0.253061520471542)
-    b04_norm = normalize(in_bd['B4'], 0, 0.290393577911328)
-    b05_norm = normalize(in_bd['B5'], 0, 0.305398915248555)
-    b06_norm = normalize(in_bd['B6'], 0.006637972542253, 0.608900395797889)
-    b07_norm = normalize(in_bd['B7'], 0.013972727018939, 0.753827384322927)
+    b03_norm = normalize(in_bd['B03'], 0, 0.253061520471542)
+    b04_norm = normalize(in_bd['B04'], 0, 0.290393577911328)
+    b05_norm = normalize(in_bd['B05'], 0, 0.305398915248555)
+    b06_norm = normalize(in_bd['B06'], 0.006637972542253, 0.608900395797889)
+    b07_norm = normalize(in_bd['B07'], 0.013972727018939, 0.753827384322927)
     b8a_norm = normalize(in_bd['B8A'], 0.026690138082061, 0.782011770669178)
     b11_norm = normalize(in_bd['B11'], 0.016388074192258, 0.493761397883092)
     b12_norm = normalize(in_bd['B12'], 0, 0.493025984460231)

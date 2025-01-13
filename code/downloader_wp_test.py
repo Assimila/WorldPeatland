@@ -6,18 +6,17 @@ import sys
 import os
 from osgeo import ogr
 import glob
+import time
 import subprocess
 import yaml
 from datetime import datetime, timedelta
 from urllib.error import HTTPError
 from urllib.request import urlretrieve
 from tqdm import tqdm
-
-sys.path.append('/workspace/TATSSI')
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 # Sentinel Downloaders
 from WorldPeatland.code.SentinelDownloader import SentinelDownloader
-
+sys.path.append('/workspace/TATSSI')
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_polygon(geojson_path):
-    '''
+    """
     get_polygon function extract bbox layer of a GeoJson file site and gives an osgeo geometry object 
     
     INPUT
@@ -34,7 +33,7 @@ def get_polygon(geojson_path):
     OUTPUT
         - polygon (osgeo.ogr.Geometry) - polygon geometry object containing extent lat and lon of the site 
         - site_name (str) - string of the site_area name from GeoJson file 
-    '''
+    """
 
     # Open the GeoJSON file
     driver = ogr.GetDriverByName("GeoJSON")
@@ -83,14 +82,15 @@ def get_polygon(geojson_path):
 
 
 def create_dir(output_dir, directory):
-    '''
-    create_dir fucntion will first check if the directory already exist if not it will 
+    """
+    create_dir function will first check if the directory already exist if not it will
     create a directory where it will store the data to be downloaded
-    
+
     INPUTS:
         - output_dir (str/path) - specified by the user where they want the data to be downloaded
-        - directory (str) - specified by each step in the code to create, usually its the name of the data product to be downloaded
-    '''
+        - directory (str) - specified by each step in the code to create, usually it's the name of the data product
+                            to be downloaded
+        """
 
     # Path 
     path = os.path.join(output_dir, directory)
@@ -105,16 +105,17 @@ def create_dir(output_dir, directory):
 
 
 def ogrIntersection(tiles_layer, site_bbox):
-    '''
-    ogrIntersection function finds the MODIS tile corresponding to the shapefile location 
-    
+    """
+    ogrIntersection function finds the MODIS tile corresponding to the shapefile location
+
     INPUTS:
-        - tiles_layer - in this example its the MODIS sinusoidal world grid file
+        - tiles_layer - in this example it's the MODIS sinusoidal world grid file
         - site_bbox - the bbox of the site to be matched
-        
+
     OUTPUTS:
-        - tiles (list) - intersection information, in this case the corresponding MODIS tile h and v value 
-    '''
+        - tiles (list) - intersection information, in this case the corresponding MODIS tile h and v value
+    """
+
     # List with tiles for every feature in site GeoJSON 
     # it has to be a list of strings to include the bbox that might intersect more than 1 MODIS tile 
     tiles = []
@@ -147,22 +148,20 @@ def read_config(config_fname):
 
 
 def format_string(input_str):
-    '''
-    
-    change the string format to be able to run the get_modis_data
-    
+    """
+    Change the string format to be able to run the get_modis_data
+
     INPUT format: h:19 v:4 => OUTPUT format: h19v04
-    
-    '''
+    """
 
     # Split the input string where there is blank space
     parts = input_str.split()  # parts is now a list of 2 strings
 
     # Process each part to remove ':' and leading zeros
     formatted_parts = []
-    # loop over both parts of the plitted string
+    # loop over both parts of the split string
     for part in parts:
-        key, value = part.split(':')  # split the parts seperated by :
+        key, value = part.split(':')  # split the parts separated by :
         formatted_parts.append(f"{key}{int(value):02d}")
         # format specifier: the 'value' should be made up of 2 decimal characters (2d)
         # and 0 for if the value is less than 2 characters it will add 0 to fill the requirement
@@ -180,8 +179,8 @@ def update_config(dst_config, site_area, tiles, polygon, country):
 
     data[0]['site_area'] = site_area  # add site_area name
     data[0]['country'] = country  # add country name to get the VIIRS S-NPP
-    data[0]['tiles'] = tiles  # add tile
-    data[0]['bbox'] = polygon.ExportToWkt()  #poly string of coordinates
+    data[0]['tiles'] = tiles  # add MODIS tile
+    data[0]['bbox'] = polygon.ExportToWkt()  # poly string of coordinates
 
     with open(dst_config, "w") as f:
         data = yaml.dump(
@@ -191,8 +190,10 @@ def update_config(dst_config, site_area, tiles, polygon, country):
 
 
 def get_modis_timestep(path, start_date, end_date, format_tiles):
-    '''get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
-    there is no need for now to download the daily data'''
+    """
+    get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
+    there is no need for now to download the daily data
+    """
 
     n_threads = 6
     _username, _password = read_config_cred()
@@ -239,7 +240,6 @@ def run_command(cmd: str):
     err_msg = None
 
     status = subprocess.call([cmd], shell=True)
-    #os.system(cmd)
 
     if status != 0:
         err_msg = f"{cmd} \n Failed"
@@ -249,8 +249,10 @@ def run_command(cmd: str):
 
 
 def get_modis_downloader(products, start_date, end_date, path_modis, site_directory, site_area, format_tiles):
-    '''this function will loop over the data products to be downloaded and choose accordingly which way to download
-    the data for albedo we do not need daily data, for now looping seperatly over 8 days timedelta'''
+    """
+    This function will loop over the data products to be downloaded and choose accordingly which way to download
+    the data for albedo we do not need daily data, for now looping separately over 8 days timedelta
+    """
 
     # create a subdirectory in the site folder to store modis link data
     path_site_modis = create_dir(site_directory, 'MODIS')
@@ -307,22 +309,21 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
 
 
 def sentinel_file_checker(path_sentinel, site_area):
-    '''
-    
+    """
     This function will extract the month and the year of the sentinel files already downloaded
     this only checks the directory set for the site_area. It also checks for empty files, if file
     is empty remove/ delete the file and do not include the date in the list so that the month is
     downloaded again. It is important to keep the same name for a same geographical area or site as
-    the directory would change, thus, the checker would not be able to look for the correct files. 
+    the directory would change, thus, the checker would not be able to look for the correct files.
     This checker for now checks files only on VH_ASCENDING
-    
+
     INPUTS
-        - path_sentinel (str) - its the path created for the sentinel data of this sepecific site_area
+        - path_sentinel (str) - it's the path created for the sentinel data of this specific site_area
         - site_area (str) - site_name obtained from the geojson file set by user
     OUTPUTS
-        - dt_l (list of datetime.date) - list of the month and dates of the already downloaded sentinel files 
-            that the checker has found in this directory. 
-    '''
+        - dt_l (list of datetime.date) - list of the month and dates of the already downloaded sentinel files
+            that the checker has found in this directory.
+    """
 
     # TODO for now only checking for VH_asc might need to check all other bands?    
     l = sorted(glob.glob(path_sentinel + f'/datacube/S1_GRD/VH_ASCENDING/{site_area}/*'))
@@ -348,16 +349,15 @@ def sentinel_file_checker(path_sentinel, site_area):
 
 
 def generate_dates(start_date, end_date):
-    '''
-    generate_dates will generate the first day of the start month and then every first day of 
-    the month until reaching the end date (exactly like the calendar, this list will be used 
-    as a reference) 
-    
+    """
+    Generate_dates will generate the first day of the start month and then every first day of
+    the month until reaching the end date (exactly like the calendar, this list will be used
+    as a reference)
+
     INPUTS
         - start_date (datetime.date) - set by user
         - end_date (datetime.date) - set by user
-        
-    '''
+    """
 
     year = start_date.year
     month = start_date.month
@@ -455,11 +455,12 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
             if os.path.exists(path_sentinel + '/rawdata/'):
                 # if the file exist remove it
                 shutil.rmtree(
-                    path_sentinel + '/rawdata/')  # rmtree function will delete noob and all files and subdirectories below it
+                    path_sentinel + '/rawdata/')
+                # rmtree function will delete noob and all files and subdirectories below it
 
 
 def get_viirs_archive(start_date, country, site_area, site_directory):
-    '''get_viirs_archive function gets the viirs_snpp (sp) data from 2012 till 2021 only'''
+    """get_viirs_archive function gets the viirs_snpp (sp) data from 2012 till 2021 only"""
 
     # create a subdirectory in the site folder to store VIIRS data
     path_viirs = create_dir(site_directory, 'VIIRS')
@@ -473,6 +474,9 @@ def get_viirs_archive(start_date, country, site_area, site_directory):
         url = (f"https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{y}/"
                f"viirs-snpp_{y}_{country}.csv")
         filename = path_viirs + f'/viirs-snpp_{y}_{country}.csv'
+
+        # Add a timer of 20 sec
+        time.sleep(20)
         try:
             urlretrieve(url, filename)
         except HTTPError as e:
@@ -500,12 +504,10 @@ def read_config_cred():
 
 def main(geojson_path, output_dir):
     """
-
     INPUTs:
     - geojson_path is the path of the json site it needs to contain at least name of the site
     and country where the site is located
     - output_dir where the user wants to the data to be downloaded
-
     """
 
     # check if GeoJson file exists    
@@ -573,12 +575,12 @@ def main(geojson_path, output_dir):
     #  path_modis = create_dir(output_dir, 'data/MODIS')
     path_modis = '/data/MODIS'
     LOG.info(f'Starting to download MODIS data for {site_area}')
-    # get_modis_downloader(products, _start_date, _end_date, path_modis, site_fpath, site_area, format_tiles)
+    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')
     get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
 
-    # get_viirs_archive(start_date, country, site_area, site_fpath)
+    get_viirs_archive(start_date, country, site_area, site_directory)
 
 
 if __name__ == "__main__":
@@ -592,8 +594,7 @@ if __name__ == "__main__":
         output_dir = sys.argv[2]
         main(geojson_path, output_dir)
 
-
-# you should be in directory where the script is 
+# you should be in directory where the script is
 # if you want to change the dates of downloads you should access the template config and change the dates in it
 
 # example in the VM of ESA

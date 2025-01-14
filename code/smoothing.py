@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 2:
 
-        print("Usage: python script.py <site_fpath>")  # the user has to input one argument
+        print("Usage: python script.py <site_root_data_directory>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         main(site_directory)

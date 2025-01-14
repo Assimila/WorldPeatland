@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_fpath> <QA_settings>")  # the user has to input one argument
+        print("Usage: python script.py <site_root_data_dir> <QA_settings>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
         QA_settings = sys.argv[2]

@@ -9,14 +9,11 @@ import glob
 import time
 import subprocess
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime
 from urllib.error import HTTPError
 from urllib.request import urlretrieve
-from tqdm import tqdm
-from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 # Sentinel Downloaders
 from WorldPeatland.code.SentinelDownloader import SentinelDownloader
-sys.path.append('/workspace/TATSSI')
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
@@ -25,14 +22,14 @@ LOG = logging.getLogger(__name__)
 
 def get_polygon(geojson_path):
     """
-    get_polygon function extract bbox layer of a GeoJson file site and gives an osgeo geometry object 
-    
+    get_polygon function extract bbox layer of a GeoJson file site and gives an osgeo geometry object
+
     INPUT
         - geojson_path (str) - path/ location of the geoJson file of the site (given by user)
-    
+
     OUTPUT
-        - polygon (osgeo.ogr.Geometry) - polygon geometry object containing extent lat and lon of the site 
-        - site_name (str) - string of the site_area name from GeoJson file 
+        - polygon (osgeo.ogr.Geometry) - polygon geometry object containing extent lat and lon of the site
+        - site_name (str) - string of the site_area name from GeoJson file
     """
 
     # Open the GeoJSON file
@@ -50,7 +47,7 @@ def get_polygon(geojson_path):
         if site_layer.GetGeomType() != ogr.wkbPolygon:  # ogr.wkbPolygon = 3
             raise Exception("The GeoJSON geometry is not a polygon")
 
-        # Get name of the geoJson area 
+        # Get name of the geoJson area
         feat = site_layer.GetFeature(0)
         site_area = feat.GetField(0)  # site_area name
         country = feat.GetField(1)  # country name
@@ -92,7 +89,7 @@ def create_dir(output_dir, directory):
                             to be downloaded
         """
 
-    # Path 
+    # Path
     path = os.path.join(output_dir, directory)
 
     if not os.path.exists(path):
@@ -116,8 +113,8 @@ def ogrIntersection(tiles_layer, site_bbox):
         - tiles (list) - intersection information, in this case the corresponding MODIS tile h and v value
     """
 
-    # List with tiles for every feature in site GeoJSON 
-    # it has to be a list of strings to include the bbox that might intersect more than 1 MODIS tile 
+    # List with tiles for every feature in site GeoJSON
+    # it has to be a list of strings to include the bbox that might intersect more than 1 MODIS tile
     tiles = []
 
     # Find overlapping features
@@ -142,7 +139,7 @@ def read_config(config_fname):
     start_date = data[0]['start_date']
     end_date = data[0]['end_date']
 
-    # Information about the first EO data product to download list index 1 
+    # Information about the first EO data product to download list index 1
     products = data[1]['products']
     return start_date, end_date, products
 
@@ -189,46 +186,6 @@ def update_config(dst_config, site_area, tiles, polygon, country):
     LOG.info(f'Config file has been created and saved here {dst_config}')
 
 
-def get_modis_timestep(path, start_date, end_date, format_tiles):
-    """
-    get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
-    there is no need for now to download the daily data
-    """
-
-    n_threads = 6
-    _username, _password = read_config_cred()
-
-    # Create the list of doy for which to order the image
-    interval = 8
-    doy_list = list(range(1, 365 + 1, interval))
-
-    # Initialize the list with the start date
-    date_list = [start_date]
-
-    # Go through dates from start_date to end_date, checking for DOY matches
-    current_date = start_date
-    while current_date <= end_date:
-        # Get the DOY of the current date
-        doy = current_date.timetuple().tm_yday
-
-        # If the DOY is in our interval list, add it to date_list
-        if doy in doy_list:
-            date_list.append(current_date)
-
-        # Move to the next day
-        current_date += timedelta(days=1)
-
-    # Remove the duplicate start date if it's added
-    date_list = list(dict.fromkeys(date_list))
-
-    # Get the data
-    for t in date_list:
-        print(t)
-        get_modis_data('MOTA', 'MCD43A3.061', format_tiles,
-                       path, t,
-                       t, n_threads, _username, _password)
-
-
 def run_command(cmd: str):
     """
     Executes a command in the OS shell
@@ -248,66 +205,6 @@ def run_command(cmd: str):
     return err_msg
 
 
-def get_modis_downloader(products, start_date, end_date, path_modis, site_directory, site_area, format_tiles):
-    """
-    This function will loop over the data products to be downloaded and choose accordingly which way to download
-    the data for albedo we do not need daily data, for now looping separately over 8 days timedelta
-    """
-
-    # create a subdirectory in the site folder to store modis link data
-    path_site_modis = create_dir(site_directory, 'MODIS')
-
-    n_threads = 6
-    _username, _password = read_config_cred()
-    for i in tqdm(range(len(products))):
-
-        '''loop over all the MODIS product to be downloaded'''
-
-        path_product = create_dir(path_modis, products[i]['product'])
-
-        if products[i]['product'] == 'MCD43A3.061':
-
-            # loop over all list of tiles to be able to create a file for each tile
-            for tile in format_tiles:
-                path_tile = create_dir(path_product, tile)
-
-                get_modis_timestep(path_tile, start_date, end_date, tile)
-
-                path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
-
-                try:
-                    # create link to the site modis tile related data
-                    err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
-
-                    if err_msg:
-                        raise Exception(f'Link already exists: {path_site_product}')
-                except Exception as e:
-                    LOG.error(e)
-        else:
-
-            for tile in format_tiles:
-
-                # where the data will be downloaded
-                path_tile = create_dir(path_product, tile)
-
-                # Set the date strings as datetime.datetime so that get_modis_data works 
-                get_modis_data(products[i]['platform'], products[i]['product'], tile,
-                               path_tile, start_date, end_date, n_threads, _username, _password)
-
-                # where the data will be linked, this is in the site specific modis file 
-                path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
-
-                try:
-                    err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
-
-                    if err_msg:
-                        raise Exception(f'Link already exists: {path_site_product}')
-                except Exception as e:
-                    LOG.error(e)
-
-                LOG.info(f"MODIS {products[i]['product']} download complete for {site_area}-{format_tiles}")
-
-
 def sentinel_file_checker(path_sentinel, site_area):
     """
     This function will extract the month and the year of the sentinel files already downloaded
@@ -325,7 +222,7 @@ def sentinel_file_checker(path_sentinel, site_area):
             that the checker has found in this directory.
     """
 
-    # TODO for now only checking for VH_asc might need to check all other bands?    
+    # TODO for now only checking for VH_asc might need to check all other bands?
     l = sorted(glob.glob(path_sentinel + f'/datacube/S1_GRD/VH_ASCENDING/{site_area}/*'))
 
     dt_l = []
@@ -510,7 +407,7 @@ def main(geojson_path, output_dir):
     - output_dir where the user wants to the data to be downloaded
     """
 
-    # check if GeoJson file exists    
+    # check if GeoJson file exists
     if not os.path.isfile(geojson_path):
         LOG.error('GeoJSON file does not exist')
         return
@@ -520,7 +417,7 @@ def main(geojson_path, output_dir):
         return
 
     try:
-        # get info from Json file 
+        # get info from Json file
         polygon, site_area, country = get_polygon(geojson_path)
 
     except Exception as e:
@@ -530,7 +427,7 @@ def main(geojson_path, output_dir):
     # inform user processing started
     LOG.info(f'{site_area} is now processing')
 
-    # Create a site specific directory   
+    # Create a site specific directory
     site_directory = create_dir(output_dir, site_area)  # output_dir set by user
 
     # Read MODIS tiles KML as layer
@@ -558,10 +455,10 @@ def main(geojson_path, output_dir):
 
     shutil.copyfile(config_src, dst_config)
 
-    # read config 
+    # read config
     start_date, end_date, products = read_config(dst_config)
 
-    # update the new config created with the data from geojson 
+    # update the new config created with the data from geojson
     update_config(dst_config, site_area, format_tiles, polygon, country)
 
     # set date strings as datetime objects both get_modis and get_sentinel will need it as datetime object
@@ -570,12 +467,6 @@ def main(geojson_path, output_dir):
 
     # sentinel data availability dates from this link
     # https://developers.google.com/earth-engine/datasets/catalog/sentinel
-
-    # create a data/MODIS directory to store all products not in a site specific file
-    #  path_modis = create_dir(output_dir, 'data/MODIS')
-    path_modis = '/data/MODIS'
-    LOG.info(f'Starting to download MODIS data for {site_area}')
-    get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
     LOG.info(f'MODIS data download completed for {site_area}')
     get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')

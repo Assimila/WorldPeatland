@@ -406,7 +406,7 @@ def main(site_dir):
         CLD_PRB_THRESH = 0.5
         # NIR dark pixel reflectance threshold is set to 0.15 already descaled
         NIR_DRK_THRESH = 0.25
-        maxDis = 150
+        maxDis = 500
 
         # Reproject SCL layer once per timestep
         pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'SCL', f'*{timestep}.tif')
@@ -457,8 +457,6 @@ def main(site_dir):
         cloud_mask = (is_cloud | shadows) & ~water_pixels  # dtype numpy array
         LOG.info(f'Cloud mask successfully formed for {timestep}')
 
-        # TODO save cloud mask as well
-
         variables = {
             'lai': lai_array,
             'fapar': fapar_array,
@@ -469,7 +467,7 @@ def main(site_dir):
         proj4_string = get_proj4_from_tif(month_tif)
         path = os.path.join(site_dir, 'MSIL2A', 'datacube', 'MLEONN')
         for varname, var_arr in variables.items():
-            print(f"Processing {varname}...")
+            LOG.info(f"Processing {varname}...")
             create(var_arr, cloud_mask, dts, opn, varname, proj4_string, path, timestep)
 
 

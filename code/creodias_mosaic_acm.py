@@ -636,3 +636,5 @@ if __name__ == "__main__":
         geojson_fname = sys.argv[1]
         OUTPUT_DIR = sys.argv[2]
         main(geojson_fname, OUTPUT_DIR)
+
+# nohup python -m WorldPeatland.code.creodias_mosaic_acm /workspace/WorldPeatland/sites/HatfieldThorne.geojson /wp_data/sites/HatfieldThorne/Sentinel > /workspace/logs/HatfieldThorne_cprob_20250114.log &

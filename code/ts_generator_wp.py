@@ -7,6 +7,8 @@ import sys
 import glob
 
 from TATSSI.TATSSI.time_series.generator import Generator
+from WorldPeatland.settings import ROOT_DATA_DIR, GEOJSON_PATH
+
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -154,27 +156,26 @@ def get_ts(site_directory, json_path):
             LOG.info(f'time series generated for this product {n}')
 
 
-def main(site_directory, json_path):
+def main(site_directory):
     """
     INPUT
         site_fpath - str - path to a specific site where all data were previously downloaded
     """
-    get_ts(site_directory, json_path)
+    get_ts(site_directory, GEOJSON_PATH)
 
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
 
-        print("Usage: python script.py <site_fpath> <geojson_file>")  # the user has to input one argument
+        print("Usage: python script.py <site_root_data_directory>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
-        json_path = sys.argv[2]
-        main(site_directory, json_path)
+        main(site_directory)
 
 # example how to run this script in command line (if script run in jupyter notebook)
 # you should be where the code is saved in /workspace/WorldPeatland/code
-# python ts_generator_wp.py /wp_data/sites/Degero/ /workspace/WorldPeatland/sites/Degero.geojson
+# python ts_generator_wp.py /wp_data/sites/Degero/
 
 # if you are using PyCharm, you should be in /workspace and run the following command
-# python -m WorldPeatland.code.ts_generator_wp /wp_data/sites/Norfolk/ /workspace/WorldPeatland/sites/Norfolk.geojson
+# python -m WorldPeatland.code.ts_generator_wp /wp_data/sites/Norfolk/

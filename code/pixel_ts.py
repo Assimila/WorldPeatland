@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_fpath> <True/False>")  # the user has to input two arguments
+        print("Usage: python script.py <site_root_data_dir> <True/False>")  # the user has to input two arguments
     else:
         site_directory = sys.argv[1]
         value = sys.argv[2].lower()
@@ -179,7 +179,8 @@ if __name__ == "__main__":
         elif value == 'false':
             value = False
         else:
-            print("Invalid value! Please enter 'True' or 'False'.")
+            print("Invalid value! Please enter 'True' (if you want to remove seasonal trend) or 'False' (if you'd "
+                  "like to keep the seasonal trends).")
             sys.exit(1)
         
         main(site_directory, value)

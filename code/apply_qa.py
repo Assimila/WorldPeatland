@@ -5,7 +5,7 @@ import glob
 from datetime import datetime
 import os
 import logging
-from WorldPeatland.code.downloader_wp_test import create_dir, read_config
+from WorldPeatland.code.download_modis import create_dir, read_config
 
 from TATSSI.TATSSI.notebooks.helpers.qa_analytics import Analytics
 # from TATSSI.notebooks.helpers.utils import *

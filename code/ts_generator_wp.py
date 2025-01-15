@@ -7,7 +7,7 @@ import sys
 import glob
 
 from TATSSI.TATSSI.time_series.generator import Generator
-from WorldPeatland.settings import ROOT_DATA_DIR, GEOJSON_PATH
+from WorldPeatland.settings import GEOJSON_PATH
 
 
 logging.basicConfig(level=logging.INFO)

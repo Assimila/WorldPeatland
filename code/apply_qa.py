@@ -159,7 +159,6 @@ if __name__ == "__main__":
     else:
         site_directory = sys.argv[1]
         QA_settings = sys.argv[2]
-
         main(site_directory, QA_settings)
 # Choose the QA settings folder that you'd like the strict one is 'QA_settings'
 # while the least restrictive options is 'QA_settings_v1'

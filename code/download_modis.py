@@ -5,10 +5,11 @@ import os
 from osgeo import ogr
 import subprocess
 import yaml
+import sys
 from datetime import datetime, timedelta
 from tqdm import tqdm
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
-from WorldPeatland.settings import ROOT_DATA_DIR, EARTH_DATA_CRED, GEOJSON_PATH
+from WorldPeatland.settings import ROOT_DATA_DIR, EARTH_DATA_CRED
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -350,7 +351,7 @@ def read_config_cred():
     return username, password
 
 
-def main():
+def main(GEOJSON_PATH):
     # check if GeoJson file exists    
     if not os.path.isfile(GEOJSON_PATH):
         LOG.error('GeoJSON file path set in settings.py does not exist, update settings.py')
@@ -418,8 +419,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
 
+        print("Usage: python script.py <GEOJSON_PATH>")  # the user has to input one argument
+    else:
+        GEOJSON_PATH = sys.argv[1]
+        main(GEOJSON_PATH)
 # you should be in directory where the script is
 # if you want to change the dates of downloads you should access the template config and change the dates in it
 

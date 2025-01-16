@@ -7,7 +7,6 @@ import sys
 import glob
 
 from TATSSI.TATSSI.time_series.generator import Generator
-from WorldPeatland.settings import GEOJSON_PATH
 
 
 logging.basicConfig(level=logging.INFO)
@@ -78,7 +77,7 @@ def get_ts(site_directory, json_path):
     products 
     """
     modis_dir = site_directory + 'MODIS/'
-    print('modis directory', modis_dir)
+    LOG.info(f'modis directory: {modis_dir}')
 
     if not os.path.exists(site_directory):
         LOG.error(f'This director does not exist: {site_directory}')
@@ -94,7 +93,7 @@ def get_ts(site_directory, json_path):
 
     # Checking if the list is empty or not 
     if len(dir_) == 0:
-        print(f"This directory {modis_dir} is empty")
+        LOG.error(f"This directory {modis_dir} is empty")
         return
 
     # Extract the bounding box coordinates
@@ -109,9 +108,6 @@ def get_ts(site_directory, json_path):
 
     product_dir = [item for item in dir_ if item.startswith('M')]
 
-    # TODO remove this line later
-    product_dir = ['MCD43A3.061']
-
     for i, n in enumerate(product_dir):
 
         LOG.info(n)
@@ -122,9 +118,6 @@ def get_ts(site_directory, json_path):
         output_dirs = glob.glob(modis_dir + n + f'/*/')
 
         for output_dir in output_dirs:
-
-            print(output_dir)
-
             # Create for MCD64A1 because the files are in hdf format just
             # for the processing to be able to use the data do not apply mask 
             # later on MCD64A1 with the apply_qa.py
@@ -156,22 +149,23 @@ def get_ts(site_directory, json_path):
             LOG.info(f'time series generated for this product {n}')
 
 
-def main(site_directory):
+def main(site_directory, GEOJSON_PATH):
     """
     INPUT
-        site_fpath - str - path to a specific site where all data were previously downloaded
+        site_directory - str - path to a specific site where all data were previously downloaded
     """
     get_ts(site_directory, GEOJSON_PATH)
 
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_root_data_directory>")  # the user has to input one argument
+        print("Usage: python script.py <site_root_data_directory> <GEOJSON_PATH>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
-        main(site_directory)
+        GEOJSON_PATH = sys.argv[2]
+        main(site_directory, GEOJSON_PATH)
 
 # example how to run this script in command line (if script run in jupyter notebook)
 # you should be where the code is saved in /workspace/WorldPeatland/code

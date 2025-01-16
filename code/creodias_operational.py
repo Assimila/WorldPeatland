@@ -435,6 +435,7 @@ def main(geojson_fname, OUTPUT_DIR):
             outputs = create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, end_day, extent)
             # Create monthly COGs
             create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths)
+    LOG.info('End of Processing for all years')
 
 
 if __name__ == "__main__":

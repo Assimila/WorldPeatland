@@ -626,6 +626,8 @@ def main(geojson_fname, OUTPUT_DIR):
             # Create monthly COGs
             create_monthly_cogs(outputs_cprob, year, month)
 
+    LOG.info('End of Processing for all years')
+
 
 if __name__ == "__main__":
 

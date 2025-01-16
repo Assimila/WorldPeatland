@@ -17,20 +17,20 @@ LOG.setLevel(logging.DEBUG)
 
 
 def gdal_dt(e, time):
-    '''
-    gdal_dt function will open the tif file as an osegeo gdal dataset
+    """
+    gdal_dt function will open the tif file as an osgeo gdal dataset
 
     INPUTS:
         - e (str or tiff) - path the tiff file or the gdal dataset you want to
-            open and save its datetimes
+            open and save its datetime
         - time (string) - check how the time variable is written in the tiff metadata
     Outputs:
         - arr (np.array) - return arr of the gdal dataset
-        - dts (list) - list of the datetimes
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
-    '''
+        - dts (list) - list of the datetime
+        - saved_opn (OSGeo gdal dataset) - saved dataset for its srs
+    """
 
-    # Create an empty list to store the datatimes
+    # Create an empty list to store the datetime
     dts = []
 
     # Check if the input is a str which would be the tif file

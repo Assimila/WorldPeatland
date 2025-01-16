@@ -1,7 +1,7 @@
 
 from glob import glob
 import os
-from WorldPeatland.code.downloader_wp_test import read_config
+from WorldPeatland.code.download_modis import read_config
 from TATSSI.TATSSI.time_series.smoothing import Smoothing
 import logging
 import sys

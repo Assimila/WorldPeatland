@@ -161,4 +161,4 @@ cython_debug/
 
 
 # Custome files
-/WorldPeatland/earth_data_cred.json
+cred_earth_data.json

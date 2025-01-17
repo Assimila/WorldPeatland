@@ -190,7 +190,6 @@ def get_modis_timestep(path, start_date, end_date, format_tiles):
     """
 
     n_threads = 6
-    _username, _password = read_config_cred()
 
     # Create the list of doy for which to order the image
     interval = 8
@@ -218,9 +217,7 @@ def get_modis_timestep(path, start_date, end_date, format_tiles):
     # Get the data
     for t in date_list:
         print(t)
-        get_modis_data('MOTA', 'MCD43A3.061', format_tiles,
-                       path, t,
-                       t, n_threads, _username, _password)
+        get_modis_data('MOTA', 'MCD43A3.061', format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
 
 
 def run_command(cmd: str):
@@ -252,7 +249,6 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
     path_site_modis = create_dir(site_directory, 'MODIS')
 
     n_threads = 6
-    _username, _password = read_config_cred()
     for i in tqdm(range(len(products))):
 
         '''loop over all the MODIS product to be downloaded'''
@@ -285,8 +281,8 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
                 path_tile = create_dir(path_product, tile)
 
                 # Set the date strings as datetime.datetime so that get_modis_data works 
-                get_modis_data(products[i]['platform'], products[i]['product'], tile,
-                               path_tile, start_date, end_date, n_threads, _username, _password)
+                get_modis_data(products[i]['platform'], products[i]['product'], tile, path_tile, EARTH_DATA_CRED,
+                               start_date, end_date, n_threads)
 
                 # where the data will be linked, this is in the site specific modis file 
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
@@ -335,20 +331,6 @@ def check_dates(start_date, end_date, sentinel_start_date):
         LOG.info(f'Sentinel data is only available after {sentinel_start_date}')
         start_date = sentinel_start_date
     return start_date, end_date
-
-
-def read_config_cred():
-    """
-    Read downloaders config file
-    """
-
-    with open(EARTH_DATA_CRED) as f:
-        credentials = json.load(f)
-
-    username = credentials['username']
-    password = credentials['password']
-
-    return username, password
 
 
 def main(GEOJSON_PATH):
@@ -413,25 +395,20 @@ def main(GEOJSON_PATH):
 
     # create a data/MODIS directory to store all products not in a site specific file
     path_modis = create_dir(ROOT_DATA_DIR, 'raw_tiles/MODIS')
+    # TODO change back to create_dir
     # path_modis = '/data/MODIS'
     LOG.info(f'Starting to download MODIS data for {site_area}')
     get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
 
-        print("Usage: python script.py <GEOJSON_PATH>")  # the user has to input one argument
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <geojson_fname>")  # the user has to input 1 arguments
     else:
+        # location of the second item in the list which is the first argument geojson site location
         GEOJSON_PATH = sys.argv[1]
         main(GEOJSON_PATH)
-# you should be in directory where the script is
-# if you want to change the dates of downloads you should access the template config and change the dates in it
 
-# example in the VM of ESA
-# python downloader_wp_test.py /workspace/WorldPeatland/sites/Norfolk.geojson /wp_data/sites
 
-# when running in the linux command line in /workspace/
-# nohup python -m WorldPeatland.code.downloader_wp_test WorldPeatland/sites/CongoSouth.geojson /wp_data/sites > /workspace/logs/CongoSouth_albedo_down_20241118.log &
 
-#  example  python downloader_wp_test.py /data/world_peatlands/src/WorldPeatland/sites/Norfolk.geojson /data/world_peatlands/demo/dry_run/

@@ -417,8 +417,7 @@ def main(geojson_fname, OUTPUT_DIR):
                                target_is_directory=True)
 
                 except FileExistsError:
-                    print(f"{element['S3Path']} already exists")
-                    print()
+                    LOG.info(f"{element['S3Path']} already exists")
 
             if len(S3Paths) > 0:
 
@@ -428,6 +427,7 @@ def main(geojson_fname, OUTPUT_DIR):
                 with open(pickle_fname, 'wb') as file:
                     pickle.dump(sensing_dates, file)
             else:
+                LOG.info(f'Data not available for {year}-{month} with this cloud coverage filter {cloud_cover_le}')
                 continue
 
             # Create daily VRTs

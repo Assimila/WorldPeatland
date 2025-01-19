@@ -227,7 +227,7 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
     """
     Create mosaics for daily set of Sentinel-2 acquisitions
     """
-    # Dictionary to store all ouputs per dataset-band
+    # Dictionary to store all outputs per dataset-band
     outputs = {}
 
     # Find all images for a particular day
@@ -317,7 +317,7 @@ def run_cprob(OUTPUTDIR, datasets, outputs, product='S2_TOA'):
         fl = get_flist(datasets, OUTPUTDIR, t, product='S2_TOA')
         # calculate the cprob array
         cprob_arr = calculate_cprob(fl)
-        LOG.info(f'Cloud probability successfully created for {t}')
+        LOG.info(f'Cloud probability array successfully calculated for {t}')
 
         # get date and coordinates from B02 vrt file
         opn = gdal.Open(fl[1])

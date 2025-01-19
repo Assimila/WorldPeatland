@@ -11,6 +11,7 @@ from lightgbm import Booster
 import json
 from pyproj import Transformer
 from calendar import monthrange
+from datetime import datetime
 from osgeo import gdal, osr
 import pickle
 import sys
@@ -231,11 +232,9 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
 
     # Find all images for a particular day
     for day in range(1, days + 1):
-        date = f"{year}{month:02}{day:02}"
-        images = []
-        for img in S3Paths:
-            if img.find(date) > 0:
-                images.append(img)
+        # Better pattern to search for the first date is the date when the image was taken
+        date = f"MSIL1C_{year:04}{month:02}{day:02}"  # Ensure year is 4 digits
+        images = [img for img in S3Paths if date in img]
 
         if len(images) == 0:
             images = []
@@ -526,10 +525,11 @@ def main(geojson_fname, OUTPUT_DIR):
 
     # loop over all pickle files in the list to extract the set sensing dates information
     for pkl in pkl_flist:
+
         # Open pickle file and get the set sensing dates
         with open(pkl, 'rb') as f:
-            sensing_dates_list = pickle.load(f)
 
+            sensing_dates_list = pickle.load(f)
         year, month = get_year_month(pkl)
 
         LOG.info(f'Fetching MSL1AC data for {month}-{year}')
@@ -547,28 +547,43 @@ def main(geojson_fname, OUTPUT_DIR):
 
         # Remove unnecessary characters from encoded URL
         url_encoded_cleared = url_encoded.replace('%0A', '')
-        # Obtain and print the response
-        response = requests.get(url_encoded_cleared)
-        response = response.json()
+
+        # Initialize the S3Paths list
+        element = []
+
+        # Start fetching pages
+        while url_encoded_cleared:
+            # Get the response
+            response = requests.get(url_encoded_cleared)
+            response_data = response.json()
+
+            # Extract the S3Paths from the current page, assuming they are in a field called "value"
+            element.extend(response_data.get("value", []))
+
+            # Check for the next page using @odata.nextLink
+            url_encoded_cleared = response_data.get("@odata.nextLink")
+
         S3Paths = []
-        for i, element in enumerate(response['value']):
+        for i in range(len(element)):
 
             # Get acquisition date first date in the S3Path file name
-            image_name = os.path.basename(element['S3Path'])
-            sensing_date = image_name.split('_')[2]
+            end_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
+            sensing_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
+
+            image_name = element[i]['Name']
 
             # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR
             # L2A
             if sensing_date in sensing_dates_list:
 
-                S3Paths.append(element['S3Path'])
+                S3Paths.append(element[i]['S3Path'])
 
                 new_dir = os.path.join(OUTPUTDIR, image_name)
                 try:
-                    os.symlink(element['S3Path'], new_dir, target_is_directory=True)
+                    os.symlink(element[i]['S3Path'], new_dir, target_is_directory=True)
 
                 except FileExistsError:
-                    LOG.info(f"{element['S3Path']} already exists")
+                    LOG.info(f"{element[i]['S3Path']} already exists")
             else:
                 continue
         # since this is based on the pickle files, if a pickle file is there meaning SR data is available
@@ -587,28 +602,43 @@ def main(geojson_fname, OUTPUT_DIR):
 
             # Remove unnecessary characters from encoded URL
             url_encoded_cleared = url_encoded.replace('%0A', '')
-            # Obtain and print the response
-            response = requests.get(url_encoded_cleared)
-            response = response.json()
+
+            # Initialize the S3Paths list
+            element = []
+
+            # Start fetching pages
+            while url_encoded_cleared:
+                # Get the response
+                response = requests.get(url_encoded_cleared)
+                response_data = response.json()
+
+                # Extract the S3Paths from the current page, assuming they are in a field called "value"
+                element.extend(response_data.get("value", []))
+
+                # Check for the next page using @odata.nextLink
+                url_encoded_cleared = response_data.get("@odata.nextLink")
+
             S3Paths = []
-            for i, element in enumerate(response['value']):
+            for i in range(len(element)):
 
                 # Get acquisition date first date in the S3Path file name
-                image_name = os.path.basename(element['S3Path'])
-                sensing_date = image_name.split('_')[2]
+                end_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
+                sensing_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
 
-                # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained
-                # from SR L2A
+                image_name = element[i]['Name']
+
+                # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR
+                # L2A
                 if sensing_date in sensing_dates_list:
 
-                    S3Paths.append(element['S3Path'])
+                    S3Paths.append(element[i]['S3Path'])
 
                     new_dir = os.path.join(OUTPUTDIR, image_name)
                     try:
-                        os.symlink(element['S3Path'], new_dir, target_is_directory=True)
+                        os.symlink(element[i]['S3Path'], new_dir, target_is_directory=True)
 
                     except FileExistsError:
-                        LOG.info(f"{element['S3Path']} already exists")
+                        LOG.info(f"{element[i]['S3Path']} already exists")
                 else:
                     continue
 

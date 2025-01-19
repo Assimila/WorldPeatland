@@ -181,11 +181,10 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
 
     # Find all images for a particular day
     for day in range(1, days + 1):
-        date = f"{year}{month:02}{day:02}"
-        images = []
-        for img in S3Paths:
-            if img.find(date) > 0:
-                images.append(img)
+
+        # Better pattern to search for the first date is the date when the image was taken
+        date = f"MSIL2A_{year:04}{month:02}{day:02}"  # Ensure year is 4 digits
+        images = [img for img in S3Paths if date in img]
 
         if len(images) == 0:
             images = []

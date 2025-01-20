@@ -27,9 +27,7 @@ then it will INTERPOLATE the cleaned time series
 '''
 
 
-def main(site_directory, QA_settings):
-
-    qa_path = f"/workspace/WorldPeatland/{QA_settings}/"
+def main(site_directory, qa_path):
 
     # get the specific config path for this site 
     # to get the dates and the products
@@ -114,6 +112,7 @@ def main(site_directory, QA_settings):
                     qa_analytics.ts.data[_data_var].attrs
 
                 # create the directory to store QA analytics
+                QA_settings = os.path.basename(qa_path)
                 path_analytics = create_dir(site_directory + 'MODIS/', f'analytics_{QA_settings}')
 
                 print('path_analytics:', path_analytics, 'for variable:', _data_var)
@@ -155,11 +154,11 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <site_root_data_dir> <QA_settings>")  # the user has to input one argument
+        print("Usage: python script.py <site_root_data_dir> <qa_path>")  # the user has to input one argument
     else:
         site_directory = sys.argv[1]
-        QA_settings = sys.argv[2]
-        main(site_directory, QA_settings)
+        qa_path = sys.argv[2]
+        main(site_directory, qa_path)
 # Choose the QA settings folder that you'd like the strict one is 'QA_settings'
 # while the least restrictive options is 'QA_settings_v1'
 

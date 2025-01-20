@@ -68,7 +68,9 @@ def main(site_directory, qa_path):
                     LOG.error(f'A MODIS file does not exist: {source_dir}')
 
                 # json file for qa_settings
-                qa_json = f'{qa_path}{product}.{version}_{qa_def}.json'
+                qa_json = os.path.join(
+                    qa_path, f"{product}.{version}_{qa_def}.json"
+                )
 
                 # check if a qa_file exists in this directory
                 if not os.path.exists(qa_json):

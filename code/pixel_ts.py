@@ -1,5 +1,5 @@
 
-from glob import glob
+import glob
 import os
 import sys
 from datetime import datetime as dt
@@ -13,7 +13,7 @@ LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 
-'''piexl_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
+'''pixel_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
 def gdal_dt(e, time):

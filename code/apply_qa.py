@@ -17,10 +17,6 @@ import sys
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
-
-sys.path.append('/workspace/TATSSI/')
-sys.path.insert(0, '/workspace/WorldPeatland/code/')
-
 ''' 
 apply_qa its the 3rd code to run will apply the qa settings to the MODIS data time series generated in code 2 
 then it will INTERPOLATE the cleaned time series

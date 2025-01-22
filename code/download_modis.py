@@ -46,8 +46,8 @@ def get_polygon(geojson_path):
 
         # Get name of the geoJson area 
         feat = site_layer.GetFeature(0)
-        site_area = feat.GetField(0)  # site_area name
-        country = feat.GetField(1)  # country name
+        site_area = feat.GetField("site_area")  # site_area name
+        country = feat.GetField("country")  # country name
 
         # Get the extent (bounding box) of the layer
         extent = site_layer.GetExtent()

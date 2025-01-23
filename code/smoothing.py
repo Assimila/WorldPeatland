@@ -1,12 +1,10 @@
 
-from glob import glob
+import glob
 import os
 from WorldPeatland.code.download_modis import read_config
 from TATSSI.TATSSI.time_series.smoothing import Smoothing
 import logging
 import sys
-sys.path.append('/workspace/TATSSI/')
-sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)

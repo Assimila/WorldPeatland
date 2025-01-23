@@ -3,13 +3,19 @@ from osgeo import gdal
 import pandas as pd
 import time
 from tqdm import tqdm
+import glob
 import sys
+import os
 import geopandas as gpd
+from datetime import datetime
+import logging
 import matplotlib
 matplotlib.use('nbAgg')
-# from gdal_sheep import
-# from save_xarray_to_gtiff import
 from rasterstats import zonal_stats
+from WorldPeatland.code.download_modis import create_dir
+
+logging.basicConfig(level=logging.INFO)
+LOG = logging.getLogger(__name__)
 
 
 def calc_zonal_stat(data_tif_path, shapefile_path):
@@ -28,9 +34,6 @@ def calc_zonal_stat(data_tif_path, shapefile_path):
         dict_ = z[0]
         l.append(dict_)
 
-    # the length of the nested list should be the same as the number of bands
-    print(f'length of l is: {len(l)}')
-
     # Create a dataframe of the zonal stat
     lst_min = []
     lst_max = []
@@ -45,32 +48,45 @@ def calc_zonal_stat(data_tif_path, shapefile_path):
     df = pd.DataFrame({"min": lst_min, "max": lst_max,
                        "mean": lst_mean, "median": lst_median})
 
-    print(f'dataframe of zonal statistics is: {df}')
+    LOG.info(f'ZonalStats successfully calculated for {data_tif_path}')
+    return opn, bands, df
 
-    # save the raw zonal stat in a pickle file
-    pickle_path = f'/wp_data/sites/HatfieldThorne/MODIS/timeSeries/ZonalStats/{nm_dp_v}_{nm_lyr}_{start_dt}-{end_dt}_zonalstat_{nm_shp}_initial'
-    df.to_pickle(pickle_path)
 
-    return opn, bands, pickle_path
-
-# Input Variables
-shapefile_path = "/workspace/WorldPeatland/sites/util_shapefiles/Hatfield_Moors_sinusoidal.shp"
-data_tif_path = "/wp_data/sites/HatfieldThorne/MODIS/timeSeries/MCD15A3H.061._Lai_500m.linear.smoothn.0.5.descaled.tif"
-# Name of the shapefile or area clipped
-nm_shp = 'Hatfield'
-# Name of the data product and version
-nm_dp_v = 'MCD15A3H.061'
-# Name of the layer
-nm_lyr = '_Lai_500m'
-# Start date YMD
-start_dt = '20130601'
-# End dat YMD
-end_dt = '20230630'
+def get_dts(opn, bands):
+    dts = []
+    for i in range(len(bands)):
+        lyr = opn.GetRasterBand(i + 1)
+        mtd = lyr.GetMetadata()
+        time = mtd['time']
+        time = datetime.strptime(time, '%Y-%m-%dT00:00:00.000000000').strftime('%d-%m-%Y')
+        dts.append(time)
+    return dts
 
 
 def main(site_directory, shapefile_path):
 
-    opn, bands, pickle_path = calc_zonal_stat(data_tif_path, shapefile_path)
+    data_tif_list = glob.glob(site_directory + 'MODIS/timeSeries/*tif')
+    modis_timeSeries_path = site_directory + f'/MODIS/timeSeries/'
+    zonal_stats_dir = create_dir(modis_timeSeries_path, 'ZonalStats')
+
+    for data_tif_path in data_tif_list:
+        # get tif file name
+        tif_filename = os.path.basename(data_tif_path)
+        LOG.info(f'ZonalStats calculation started for {tif_filename}')
+        opn, bands, df = calc_zonal_stat(data_tif_path, shapefile_path)
+
+        dts = get_dts(opn, bands)
+        # set the dts as index of the dataframe
+        df['Dates'] = dts
+        df['Dates'] = pd.to_datetime(df['Dates'], format='%d-%m-%Y')
+        df.set_index('Dates', inplace=True)
+
+        # create pkl_filename from tif_filename
+        pkl_filename = tif_filename.replace('.tif', '.zonalStats.pkl')
+        # save the raw zonal stat in a pickle file
+        output_path = os.path.join(zonal_stats_dir, pkl_filename)
+        df.to_pickle(output_path)
+        LOG.info(f'Zonal stats successfully saved here: {output_path}')
 
 
 if __name__ == "__main__":

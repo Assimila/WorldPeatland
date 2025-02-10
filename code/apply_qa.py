@@ -45,8 +45,9 @@ def main(site_directory, qa_path):
 
         LOG.info(f' product processed is {product} version {version}')
 
-        if product == 'MCD64A1':
-            # TODO maybe generate the ts but TATSSI will cut for this type of data
+        # Skip processing if product is MCD64A1 or MCD43A2
+        if product in ('MCD64A1', 'MCD43A2'):
+            LOG.info(f'Skipping product {product}')
             continue
 
         _data_var_list = products[i]['data_var']

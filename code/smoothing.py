@@ -45,7 +45,7 @@ def main(site_directory):
 
         product = j['product']
         
-        if product == 'MCD64A1.061':
+        if product in ('MCD64A1.061', 'MCD43A2.061'):
             continue
         
         smoothing_method, s = j['smooth_method'], j['smooth_factor']

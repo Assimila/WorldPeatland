@@ -2,16 +2,21 @@
 import json
 import collections
 import glob
+import shutil
+
+import numpy as np
+import rioxarray
 from datetime import datetime
 import os
+from osgeo import gdal
 import logging
-from WorldPeatland.code.download_modis import create_dir, read_config
-
+from WorldPeatland.code.download_modis import read_config
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 from TATSSI.TATSSI.notebooks.helpers.qa_analytics import Analytics
-# from TATSSI.notebooks.helpers.utils import *
 from TATSSI.TATSSI.input_output.utils import save_dask_array
 from TATSSI.TATSSI.notebooks.helpers.time_series_interpolation import \
     TimeSeriesInterpolation
+from WorldPeatland.code.utils import create_dir
 
 import sys
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +54,44 @@ def main(site_directory, qa_path):
         if product in ('MCD64A1', 'MCD43A2'):
             LOG.info(f'Skipping product {product}')
             continue
+
+        # if MCD43A3 apply snow mask before interpolation
+        if product == 'MCD43A3':
+
+            albedo_sr_paths = glob.glob(os.path.join(site_directory, 'MODIS/MCD43A3.061/*/Albedo_WSA_Band2/*.tif'))
+            for albedo_path in albedo_sr_paths:
+                # get the timestep
+                timestep = os.path.basename(albedo_path).split('.')[1]
+
+                # find the corresponding snow albedo tif
+                snow_path = glob.glob(os.path.join(site_directory,
+                                                   f'MODIS/MCD43A2.061/*/Snow_BRDF_Albedo/MCD43A2.{timestep}.*.tif'))
+
+                if snow_path is not None:
+                    snow_path = snow_path[0]
+                else:
+                    LOG.error(f'No corresponding snow BRDF albedo was found for {timestep}')
+
+                dataset = gdal.Open(albedo_path, gdal.GA_Update)
+                band = dataset.GetRasterBand(1)
+                albedo_arr = band.ReadAsArray()
+
+                dataset = gdal.Open(snow_path)
+                bd = dataset.GetRasterBand(1)
+                snow_arr = bd.ReadAsArray()
+
+                # apply snow mask
+                # Treat snow == 255 (fill value) as 0 (no snow)
+                snow_arr = np.where(snow_arr == 255, 0, snow_arr)
+                # Apply the mask: keep albedo where snow == 1, else set to 32767 (fil_value)
+                masked_albedo = np.where(snow_arr != 1, albedo_arr, 32767)
+
+                band.WriteArray(masked_albedo)
+                band.FlushCache()
+                bd.FlushCache()
+                dataset = None
+
+                LOG.info(f'snow masked applied to {albedo_path}')
 
         _data_var_list = products[i]['data_var']
         qa_def_list = products[i]['qa_def']

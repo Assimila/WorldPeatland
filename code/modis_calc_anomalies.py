@@ -122,7 +122,7 @@ def extract_crs_from_tif(tif_path):
 def main(ts_path, output_dir):
 
     # list of tif_paths for the non detrended data variable tif products only
-    for path in (glob.glob(f'{ts_path}/*descaled.tif')):
+    for path in (glob(f'{ts_path}/*descaled.tif')):
 
         ds, var_name = create_xarr_from_tif_path(path)
 
@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <ts_path>")  # the user has to input two arguments
+        print("Usage: python script.py <ts_path>")
     else:
         # provide the path to the time_series created from MODIS data
         ts_path = sys.argv[1]

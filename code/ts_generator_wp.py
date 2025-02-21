@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 '''ts_generator_wp 2nd script to run, it will generate time series for the MODIS data'''
 
 
-# need to update TATSSI/TATSSI/qa/EOS catalogue from APPEARS to contain all the updated products and version 
+# need to update TATSSI/TATSSI/qa/EOS catalogue from APPEARS to contain all the updated products and version
 # we can do that by removing the current pkl files in EOS and running TATSSI UI in the download data tab 
 # this will initiate by itself getting all the available pkl files in APPEARS
 
@@ -107,7 +107,8 @@ def get_ts(site_directory, json_path):
     transformed_bbox = transform_bbox(bbox, edge_samples=11)
 
     product_dir = [item for item in dir_ if item.startswith('M')]
-
+    # TODO remove this later
+    # product_dir = ['MCD43A2.061']
     for i, n in enumerate(product_dir):
 
         LOG.info(n)

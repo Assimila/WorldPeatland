@@ -71,7 +71,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     """
     pixel_ts function will open the tatssi geotiff linear and smoothened files, it will multiply it
     by the corresponding scaling factor and then detrend it. detrend is set as true, if you wish 
-    to have the pixel data not detrended for zonal statistics or other processing purposes set detrend 
+    to have the pixel data not detrend for zonal statistics or other processing purposes set detrend
     as false
     
     INPUTS:
@@ -123,7 +123,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
         
         ds_output = ds
     
-    # add the crs to the attributes of the xarray so it is there when saving the detrended final ts tif
+    # add the crs to the attributes of the xarray, so it is there when saving the detrended final ts tif
     # in this case we are making all projection sinusoidal like tatssi
     ds_output.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
 
@@ -146,7 +146,7 @@ def main(site_directory, value):
     
         product = j['product']
 
-        if product == 'MCD64A1.061':
+        if product in ('MCD64A1.061', 'MCD43A2.061'):
             continue
     
         _data_var_list = j['data_var'] 

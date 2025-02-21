@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 from WorldPeatland.settings import ROOT_DATA_DIR, EARTH_DATA_CRED
+from WorldPeatland.code.utils import create_dir
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -73,29 +74,6 @@ def get_polygon(geojson_path):
     except Exception as e:
         src_GeoJSON = None
         raise e
-
-
-def create_dir(output_dir, directory):
-    """
-    create_dir function will first check if the directory already exist if not it will
-    create a directory where it will store the data to be downloaded
-
-    INPUTS:
-        - output_dir (str/path) - specified by the user where they want the data to be downloaded
-        - directory (str) - specified by each step in the code to create, usually it's the name of the data product
-                            to be downloaded
-        """
-
-    # Path 
-    path = os.path.join(output_dir, directory)
-
-    if not os.path.exists(path):
-        os.makedirs(path)
-        LOG.info(f"Directory '{path}' created successfully.")
-    else:
-        LOG.info(f"Directory '{path}' already exists.")
-
-    return path
 
 
 def ogrIntersection(tiles_layer, site_bbox):
@@ -183,9 +161,9 @@ def update_config(dst_config, site_area, tiles, polygon, country):
     LOG.info(f'Config file has been created and saved here {dst_config}')
 
 
-def get_modis_timestep(path, start_date, end_date, format_tiles):
+def get_modis_timestep(product, platform, path, start_date, end_date, format_tiles):
     """
-    get_modis_timestep function will download MODIS data for albedo MCD43A3.61 with 8 days time step
+    get_modis_timestep function will download MODIS data for albedo MCD43A3.61 and MCD43A2.061 with 8 days time step
     there is no need for now to download the daily data
     """
 
@@ -216,8 +194,9 @@ def get_modis_timestep(path, start_date, end_date, format_tiles):
 
     # Get the data
     for t in date_list:
-        print(t)
-        get_modis_data('MOTA', 'MCD43A3.061', format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
+        LOG.info(t)
+        get_modis_data(platform, product, format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
+        get_modis_data(platform, product, format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
 
 
 def run_command(cmd: str):
@@ -254,14 +233,14 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
         '''loop over all the MODIS product to be downloaded'''
 
         path_product = create_dir(path_modis, products[i]['product'])
-
-        if products[i]['product'] == 'MCD43A3.061':
+        product = products[i]['product']
+        if product in ('MCD43A3.061', 'MCD43A2.061'):
 
             # loop over all list of tiles to be able to create a file for each tile
             for tile in format_tiles:
                 path_tile = create_dir(path_product, tile)
-
-                get_modis_timestep(path_tile, start_date, end_date, tile)
+                platform = products[i]['platform']
+                get_modis_timestep(product, platform, path_tile, start_date, end_date, tile)
 
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
 
@@ -394,9 +373,9 @@ def main(GEOJSON_PATH):
     _end_date = datetime.strptime(end_date, '%Y-%m-%d')
 
     # create a data/MODIS directory to store all products not in a site specific file
-    path_modis = create_dir(ROOT_DATA_DIR, 'raw_tiles/MODIS')
+    # path_modis = create_dir(ROOT_DATA_DIR, 'raw_tiles/MODIS')
     # TODO change back to create_dir
-    # path_modis = '/data/MODIS'
+    path_modis = '/data/MODIS'
     LOG.info(f'Starting to download MODIS data for {site_area}')
     get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
 

@@ -2,10 +2,7 @@
 import json
 import collections
 import glob
-import shutil
-
 import numpy as np
-import rioxarray
 from datetime import datetime
 import os
 from osgeo import gdal
@@ -17,7 +14,6 @@ from TATSSI.TATSSI.input_output.utils import save_dask_array
 from TATSSI.TATSSI.notebooks.helpers.time_series_interpolation import \
     TimeSeriesInterpolation
 from WorldPeatland.code.utils import create_dir
-
 import sys
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -62,6 +58,7 @@ def main(site_directory, qa_path):
             for albedo_path in albedo_sr_paths:
                 # get the timestep
                 timestep = os.path.basename(albedo_path).split('.')[1]
+                LOG.info(f'Processing snow mask for: {timestep}')
 
                 # find the corresponding snow albedo tif
                 snow_path = glob.glob(os.path.join(site_directory,
@@ -69,27 +66,36 @@ def main(site_directory, qa_path):
 
                 if snow_path is not None:
                     snow_path = snow_path[0]
+                    LOG.info(f'Corresponding snow path used {snow_path}')
                 else:
                     LOG.error(f'No corresponding snow BRDF albedo was found for {timestep}')
 
-                dataset = gdal.Open(albedo_path, gdal.GA_Update)
-                band = dataset.GetRasterBand(1)
-                albedo_arr = band.ReadAsArray()
+                # Open albedo raster in update mode
+                albedo_dataset = gdal.Open(albedo_path, gdal.GA_Update)
+                albedo_band = albedo_dataset.GetRasterBand(1)
+                albedo_arr = albedo_band.ReadAsArray()
 
-                dataset = gdal.Open(snow_path)
-                bd = dataset.GetRasterBand(1)
-                snow_arr = bd.ReadAsArray()
+                # Open snow raster (read-only)
+                snow_dataset = gdal.Open(snow_path)
+                snow_band = snow_dataset.GetRasterBand(1)
+                snow_arr = snow_band.ReadAsArray()
 
-                # apply snow mask
-                # Treat snow == 255 (fill value) as 0 (no snow)
+                # Apply snow mask: Treat snow == 255 as 0 (no snow)
+                LOG.info('Ignoring fill value in snow layer')
                 snow_arr = np.where(snow_arr == 255, 0, snow_arr)
-                # Apply the mask: keep albedo where snow == 1, else set to 32767 (fil_value)
+
+                # Apply the mask: Keep albedo where snow == 1, else set to 32767 (fill value)
+                LOG.info('Applying snow cover mask')
                 masked_albedo = np.where(snow_arr != 1, albedo_arr, 32767)
 
-                band.WriteArray(masked_albedo)
-                band.FlushCache()
-                bd.FlushCache()
-                dataset = None
+                # Write the updated masked data back to the raster
+                LOG.info('Writing the new masked albedo layer')
+                albedo_band.WriteArray(masked_albedo)
+                albedo_band.FlushCache()  # Ensure data is written
+
+                # Close datasets properly
+                albedo_dataset = None
+                snow_dataset = None
 
                 LOG.info(f'snow masked applied to {albedo_path}')
 
@@ -99,6 +105,7 @@ def main(site_directory, qa_path):
         # zip the list to match to the data_var to the corresponding qa_def
         for _data_var, qa_def in zip(_data_var_list, qa_def_list):
 
+            LOG.info(f'Getting the data files for variable: {_data_var} under {qa_def}')
             # source_dir where the modis data for this product is stored
             source_dirs = glob.glob(site_directory + 'MODIS/' + f'{product}.{version}/*/')
 
@@ -112,7 +119,7 @@ def main(site_directory, qa_path):
                 qa_json = os.path.join(
                     qa_path, f"{product}.{version}_{qa_def}.json"
                 )
-
+                LOG.info(f'following qa settings in {qa_json}')
                 # check if a qa_file exists in this directory
                 if not os.path.exists(qa_json):
                     LOG.error(f'A MODIS file does not exist: {qa_json}')
@@ -158,7 +165,7 @@ def main(site_directory, qa_path):
                 QA_settings = os.path.basename(qa_path)
                 path_analytics = create_dir(site_directory + 'MODIS/', f'analytics_{QA_settings}')
 
-                print('path_analytics:', path_analytics, 'for variable:', _data_var)
+                LOG.info('path_analytics:', path_analytics, 'for variable:', _data_var)
 
                 # Add one dimension and save to disk percentage of data avail.
                 tmp_data_array = qa_analytics.pct_data_available.expand_dims(

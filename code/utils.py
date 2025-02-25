@@ -68,3 +68,20 @@ def get_timestep_from_tif(tif):
     match = re.search(r'\d{4}-\d{2}', filename)  # date YYYY (4 digits) and MM (2 digits)
 
     return match.group()
+
+
+
+def read_config(config_fname):
+    """
+    Read downloaders config file - Gerardo Saldana
+    """
+    with open(config_fname) as f:
+        data = yaml.full_load(f)
+
+    # Information from the first list index 0 about the site
+    start_date = data[0]['start_date']
+    end_date = data[0]['end_date']
+
+    # Information about the first EO data product to download list index 1
+    products = data[1]['products']
+    return start_date, end_date, products

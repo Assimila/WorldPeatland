@@ -4,7 +4,6 @@ import re
 from datetime import datetime as dt
 import rasterio
 import sys
-import pandas as pd
 import yaml
 import numpy as np
 import xarray as xr
@@ -15,155 +14,11 @@ from WorldPeatland.code.gdal_sheep import (gdal_stack_dt, create_coord_list, gda
                                            get_proj4_from_tif)
 from WorldPeatland.code.MLEO_NN import (LAI_evaluatePixelOrig, FAPAR_evaluatePixelOrig, FC_evaluatePixel,
                                         CAB_evaluatePixel)
-from WorldPeatland.code.smoothn import smoothn
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-
-
-sys.path.insert(0, '/workspace/WorldPeatland/code/')
+from WorldPeatland.code.utils import create_dir, get_timestep_from_tif
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
-
-
-def get_file_name(file_path):
-    """
-    get_file_name from the file path returns the modis data product name
-    and the version 
-    
-    INPUT
-        - file_path (str) - it would be the one set by the user when running the downloader_wp
-            + MODIS the path specific to download MODIS data
-    OUTPUT
-        - file_name[0] (str) - in this case it would be the MODIS data product name
-        - file_name[1] (str) - in this case it would be the MODIS data product version
-    """
-
-    file_path_components = file_path.split('/')
-    file_name = file_path_components[-1].rsplit('.', 1)
-    return file_name[0], file_name[1]
-
-
-def create_ds(regrid_dict, bands):
-    """
-    create_ds will generate a xarray ds of all the sentinel 2 datasets and cloudmask
-    INPUTS:
-        - bands (list) - keys of the dictionary with name of the bands
-    OUTPUT:
-        - ds (xarray.Dataset) - it contains all 15 sentinel bands plus the acm cloud mask 
-            of all the files in the output_dir/Sentinel (total number of variables is 16)
-    """
-
-    stack, dts, opn = gdal_stack_dt(regrid_dict)
-
-    stack_list = []
-    for i in regrid_dict:
-        stack, dts, opn = gdal_stack_dt(regrid_dict[i])
-        stack_list.append(stack)
-    stack_dict = dict(zip(bands, stack_list))
-
-    xs, ys = create_coord_list(opn)
-
-    ds = xr.Dataset(data_vars={i: (('time', 'latitude', 'longitude'), stack_dict[i]) for i in bands},
-                    coords={'time': dts, 'latitude': ys, 'longitude': xs})
-
-    return ds, dts, ys, xs
-
-
-def create_dir(output_dir, directory):
-    """
-    create_dir function will first check if the directory already exist if not it will
-    create a directory where it will store the data to be downloaded
-    
-    INPUTS:
-        - output_dir (str/path) - specified by the user where they want the data to be downloaded
-        - directory (str) - specified by each step in the code to create,
-        usually it's the name of the data product to be downloaded
-    """
-
-    # Path 
-    path = os.path.join(output_dir, directory)
-
-    if not os.path.exists(path):
-        os.makedirs(path)
-        LOG.info(f"Directory '{path}' created successfully.")
-    else:
-        LOG.info(f"Directory '{path}' already exists.")
-
-    return path
-
-
-def read_config(config_fname):
-    """
-    Read downloaders config file - Gerardo Saldana
-    """
-    with open(config_fname) as f:
-        data = yaml.full_load(f)
-
-    # Information from the first list index 0 about the site
-    start_date = data[0]['start_date']
-    end_date = data[0]['end_date']
-
-    # Information about the first EO data product to download list index 1 
-    products = data[1]['products']
-    return start_date, end_date, products
-
-
-def process_MLEONN(data, config_fname, dts, ys, xs, saved_path, tile_name, data_product):
-    start_date, end_date, products = read_config(config_fname)
-
-    # 1.Smooth data using smoothn can smoothn all the biophysical parameters
-    # use dask concatenate
-    smoothed_data = smoothn(y=data, s=10, isrobust=True, axis=0)[0]
-
-    # 2.Create xarray to be able to interpolate in function of time 
-    ds = xr.Dataset(data_vars={f'{data_product}_smooth': (('time', 'latitude', 'longitude'), smoothed_data)},
-                    coords={'time': dts, 'latitude': ys, 'longitude': xs})
-
-    # 3.Perform linear interpolation
-    ds_linear = ds.interp(coords={'time': pd.date_range(start_date, end_date, freq='1D')}, method='linear')
-
-    # 4.Set CRS attribute
-    # TODO get the proj4 str from the tif
-    proj4_utm = '+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs'
-    ds_linear.attrs['crs'] = proj4_utm
-
-    # 5.Save as utm TIFF
-    output_utm = os.path.join(saved_path, f'{data_product}_{tile_name}_smoothn_utm.tif')
-    save_xarray_old(output_utm, ds_linear, f'{data_product}_smooth')
-
-    # 6.If data is LAI, resample to 10 by 10 pixel size
-    proj4_string = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs'
-    # change projection from utm to sinusoidal 
-    output_sinu = os.path.join(saved_path, f'{data_product}_{tile_name}_smoothn_sinusoidal_resampled.tif')
-    ds = gdal.Open(output_utm)
-
-    # reproject to sinusoidal and resample to 10 by 10 pixel size
-    dsReprj = gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
-    ds = dsReprj = None  # close the files
-    LOG.info(f'{data_product}_resampled and saved')
-
-    # 8.Delete UTM files
-    os.remove(output_utm)
-
-
-def get_timestep_from_tif(tif):
-    """
-    Extract the timestep (date) from a geotif filename
-
-    INPUT
-        - tif (string) - tif file path where the filename ends with for example *2018-06.*extension*
-
-    OUTPUT
-        - timestep (string) - example 2018-06 (YYYY-MM)
-    """
-
-    # Search for the same file but for all other reflectance bands
-    # get the date from tif file name
-    filename = os.path.basename(tif)
-    # Match using regex pattern in filename
-    match = re.search(r'\d{4}-\d{2}', filename)  # date YYYY (4 digits) and MM (2 digits)
-
-    return match.group()
 
 
 def get_bands_SR_in_arrays(bd, tif, opn, month_tif, input_dict):

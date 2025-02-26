@@ -15,10 +15,8 @@ import sys
 import logging
 
 from WorldPeatland.code.utils import create_dir
-
-sys.path.append('/workspace/TATSSI')
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
 
 
 def transform_coordinate(x: float, y: float,
@@ -346,13 +344,14 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
 # =======================================================================#
 
 
-def main(geojson_fname, OUTPUT_DIR):
+def main(OUTPUT_DIR, geojson_fname):
     datasets = {'R10m': ['B02', 'B03', 'B04', 'B08'],
                 'R20m': ['B05', 'B06', 'B07', 'B8A', 'B11', 'B12'],
                 'R60m': ['B01', 'SCL'],
                 'QI_DATA': ['MSK_CLDPRB_20m']}
 
     cloud_cover_le = 30
+    OUTPUT_DIR= create_dir(OUTPUT_DIR, 'Sentinel')
     OUTPUTDIR = create_dir(OUTPUT_DIR, 'MSIL2A')
 
     # Create a file to store the sensing dates pickle files
@@ -377,6 +376,7 @@ def main(geojson_fname, OUTPUT_DIR):
                f"eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
                f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
 
+    # TODO change the start and end date to get from the config file
     for year in range(2017, 2023 + 1):
         for month in range(1, 12 + 1):
             LOG.info(f'Getting MSIL2A data for {year}-{month}')
@@ -440,12 +440,13 @@ def main(geojson_fname, OUTPUT_DIR):
 if __name__ == "__main__":
 
     if len(sys.argv) != 3:
-        print("Usage: python script.py <geojson_fname>, <OUTPUT_DIR>")  # the user has to input two arguments
+        print("Usage: python script.py <site_root_directory>, <geojson_fname> ")  # the user has to input two arguments
     else:
         # location of the second item in the list which is the first argument geojson site location
-        geojson_fname = sys.argv[1]
-        OUTPUT_DIR = sys.argv[2]
-        main(geojson_fname, OUTPUT_DIR)
+        OUTPUT_DIR = sys.argv[1]
+        geojson_fname = sys.argv[2]
+
+        main(OUTPUT_DIR, geojson_fname)
 
 #geojson_fname = '/workspace/WorldPeatland/sites/Degero.geojson'
-#OUTPUT_DIR = '/wp_data/sites/Degero/Sentinel'
+#OUTPUT_DIR = '/wp_data/sites/Degero/'

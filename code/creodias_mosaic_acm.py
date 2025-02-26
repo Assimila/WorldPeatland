@@ -473,10 +473,11 @@ def get_year_month(fpath):
 
 #####################################################################################
 
-def main(geojson_fname, OUTPUT_DIR):
+def main(OUTPUT_DIR, geojson_fname):
     datasets = ['B01', 'B02', 'B04', 'B05', 'B08',
                 'B8A', 'B09', 'B10', 'B11', 'B12']
 
+    OUTPUT_DIR = create_dir(OUTPUT_DIR, 'Sentinel')
     OUTPUTDIR = create_dir(OUTPUT_DIR, 'MSIL1C')
 
     extent = get_extent(geojson_fname)
@@ -662,11 +663,12 @@ def main(geojson_fname, OUTPUT_DIR):
 if __name__ == "__main__":
 
     if len(sys.argv) != 3:
-        print("Usage: python script.py <geojson_fname>, <OUTPUT_DIR>")  # the user has to input two arguments
+        print("Usage: python script.py <OUTPUT_DIR>, <geojson_fname>")  # the user has to input two arguments
     else:
         # location of the second item in the list which is the first argument geojson site location
-        geojson_fname = sys.argv[1]
         OUTPUT_DIR = sys.argv[2]
-        main(geojson_fname, OUTPUT_DIR)
+        geojson_fname = sys.argv[2]
+        main(OUTPUT_DIR, geojson_fname)
 
-# nohup python -m WorldPeatland.code.creodias_mosaic_acm /workspace/WorldPeatland/sites/HatfieldThorne.geojson /wp_data/sites/HatfieldThorne/Sentinel > /workspace/logs/HatfieldThorne_cprob_20250114.log &
+# nohup python -m WorldPeatland.code.creodias_mosaic_acm  /wp_data/sites/HatfieldThorne /workspace/WorldPeatland/sites/HatfieldThorne.geojson >
+# /workspace/logs/HatfieldThorne_cprob_20250114.log &

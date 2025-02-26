@@ -1,12 +1,9 @@
 import os.path
 import glob
-import re
 from datetime import datetime as dt
 import rasterio
 import sys
-import yaml
 import numpy as np
-import xarray as xr
 from osgeo import gdal
 import logging
 
@@ -198,7 +195,7 @@ def main(site_dir):
     else:
         LOG.info(f"The directory '{site_dir}' does not exist.")
 
-    s2_path = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR')
+    s2_path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR')
     LOG.info(f'Start of Processing of {s2_path}')
 
     # Path to B02 datacube tiff files

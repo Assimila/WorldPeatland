@@ -6,7 +6,7 @@ from datetime import datetime as dt
 import logging
 from osgeo import gdal
 from WorldPeatland.code.download_modis import create_dir, read_config
-from WorldPeatland.code.gdal_sheep import create_xarr
+from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 
 LOG = logging.getLogger(__name__)
@@ -16,54 +16,15 @@ LOG.setLevel(logging.DEBUG)
 '''pixel_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
-def gdal_dt(e, time):
+def _get_FillValue(opn):
     """
-    gdal_dt function will open the tif file as an osgeo gdal dataset
-
-    INPUTS:
-        - e (str or tiff) - path the tiff file or the gdal dataset you want to
-            open and save its datetime
-        - time (string) - check how the time variable is written in the tiff metadata
-    Outputs:
-        - arr (np.array) - return arr of the gdal dataset
-        - dts (list) - list of the datetime
-        - saved_opn (OSGeo gdal dataset) - saved dataset for its srs
+    Get _FillValue from band 1 (Randomly should all be the same)
     """
 
-    # Create an empty list to store the datetime
-    dts = []
+    b = opn.GetRasterBand(1)
+    md = b.GetMetadata()
 
-    # Check if the input is a str which would be the tif file
-    # otherwise it is already an opened gdal dataset
-    if type(e) == str:
-        # open the Dataset
-        opn = gdal.Open(e)
-    else:
-        opn = e
-
-    for i in range(1, opn.RasterCount + 1):
-        rst = opn.GetRasterBand(i)
-        meta = rst.GetMetadata()
-
-        # following fill in with the corresponding format
-        # 'time' check the metadata of the tiff to see what they call
-        # could also be 'RANGEBEGINNINGDATE'
-        # the time data
-        x = meta[time]
-        # also check the metadata to see how is the format of datetime data
-        dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
-        t = dt.strptime(x, dt_format)
-
-        # append it to the list
-        dts.append(t)
-
-    # save the last osegeodataset for its srs
-    saved_opn = opn
-
-    # open the array
-    arr = opn.ReadAsArray()
-
-    return arr, dts, saved_opn
+    return md['_FillValue']
 
 
 def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
@@ -84,9 +45,11 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     """
     
     # open the tif and extract dataframe
-    arr, dts, saved_opn = gdal_dt(path, 'RANGEBEGINNINGDATE')
+    arr, dts, saved_opn = gdal_dt(path)
     # put the tiff in an xarray
     ds = create_xarr(saved_opn, _data_var, arr, dts)
+    # Get fill value from geotiff
+    _FillValue = _get_FillValue(saved_opn)
     
     if _data_var == '_Lai_500m':
         scaling_factor = '0.1'
@@ -126,6 +89,9 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     # add the crs to the attributes of the xarray, so it is there when saving the detrended final ts tif
     # in this case we are making all projection sinusoidal like tatssi
     ds_output.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
+
+    # Add FillValue to attributes
+    ds_output.attrs['_FillValue'] = _FillValue
 
     # save the xarray into a tif file 
     save_xarray_old(output_fname, ds_output, _data_var)

@@ -2,6 +2,7 @@ from osgeo import gdal, osr
 from osgeo import gdal_array
 import dask.array as da
 import logging
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -38,11 +39,13 @@ def get_dst_dataset(dst_img, cols, rows, layers, dtype, proj, gt):
         dst_ds.SetGeoTransform(gt)
 
     except Exception as err:
-        if err.err_level >= gdal.CE_Warning:
-            print('Cannot write dataset: %s' % self.input.value)
+        err_level = gdal.GetLastErrorType()
+        err_msg = gdal.GetLastErrorMsg()
+
+        if err_level >= gdal.CE_Warning:
             # Stop using GDAL exceptions
             gdal.DontUseExceptions()
-            raise RuntimeError(err.err_level, err.err_no, err.err_msg)
+            raise RuntimeError(f"GDAL Error {err_level}: {err_msg}")
 
     gdal.DontUseExceptions()
     return dst_ds
@@ -114,6 +117,8 @@ def save_xarray_old(fname, xarray, data_var):
     dst_ds = get_dst_dataset(dst_img=fname, cols=cols, rows=rows,
                  layers=layers, dtype=dtype, proj=proj, gt=gt)
 
+    _FillValue = xarray.attrs['_FillValue']  # Default to NaN if not specified
+
     for layer in range(layers):
         dst_band = dst_ds.GetRasterBand(layer + 1)
 
@@ -124,6 +129,7 @@ def save_xarray_old(fname, xarray, data_var):
 
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
+        dst_band.SetMetadataItem('_FillValue', _FillValue)
 
         # Check if data is a Dask array
         if isinstance(_xarray[layer].data, da.Array):

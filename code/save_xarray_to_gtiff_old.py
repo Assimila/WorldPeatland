@@ -117,7 +117,14 @@ def save_xarray_old(fname, xarray, data_var):
     dst_ds = get_dst_dataset(dst_img=fname, cols=cols, rows=rows,
                  layers=layers, dtype=dtype, proj=proj, gt=gt)
 
-    _FillValue = xarray.attrs['_FillValue']  # Default to NaN if not specified
+    keys = ['_FillValue', 'fill_value']
+    for key in keys:
+        if key in xarray.attrs:
+            _FillValue = xarray.attrs[key]
+            break
+    else:
+        _FillValue = np.nan  # Default to NaN if not specified
+        print("No valid fill value key found in metadata, fill value set as nan.")
 
     for layer in range(layers):
         dst_band = dst_ds.GetRasterBand(layer + 1)
@@ -129,6 +136,7 @@ def save_xarray_old(fname, xarray, data_var):
 
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
+        #TODO check what happens if _FillValue not specified
         dst_band.SetMetadataItem('_FillValue', _FillValue)
 
         # Check if data is a Dask array

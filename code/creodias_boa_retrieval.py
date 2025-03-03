@@ -174,7 +174,7 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
     """
     Create mosaics for daily set of Sentinel-2 acquisitions
     """
-    # Dictionary to store all ouputs per dataset-band
+    # Dictionary to store all outputs per dataset-band
     outputs = {}
 
     # Find all images for a particular day
@@ -182,6 +182,7 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
 
         # Better pattern to search for the first date is the date when the image was taken
         date = f"MSIL2A_{year:04}{month:02}{day:02}"  # Ensure year is 4 digits
+        LOG.info(f'Processing vrts for {date}')
         images = [img for img in S3Paths if date in img]
 
         if len(images) == 0:
@@ -202,13 +203,13 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
                 for i in range(len(images)):
                     images_path.append(os.path.join(images[i], img_path))
 
-                ouput_fnames = create_subset(images_path,
+                output_fnames = create_subset(images_path,
                                              output_dir, extent, band)
 
                 if band in outputs:
-                    outputs[band].append(ouput_fnames)
+                    outputs[band].append(output_fnames)
                 else:
-                    outputs[band] = [ouput_fnames]
+                    outputs[band] = [output_fnames]
     return outputs
 
 
@@ -303,7 +304,7 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
 
                     metadata = None
                 else:
-                    print('azimuth angle not found')
+                    LOG.error('azimuth angle not found')
             else:
                 # If the dataset is MSK_CLDPRB ignore the angles because of different file paths
                 # anw it is the same values throughout the bands no need to have it in here too
@@ -337,6 +338,64 @@ def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR
         del f
 
 
+def get_processorVersion(element_item):
+
+    key = 'Name'
+    res = list(map(lambda d: d.get(key), filter(lambda d: key in d, element_item['Attributes'])))
+
+    try:
+        index = res.index("processorVersion")
+        processorVersion = element_item['Attributes'][index]['Value']
+    except ValueError:
+        LOG.error("'processorVersion' not found in the list of Attributes")
+        processorVersion = None
+    return processorVersion
+
+
+def get_processingDate(element_item):
+    """processingDate is the last date mention in the .SAFE name"""
+    key = 'Name'
+    res = list(map(lambda d: d.get(key), filter(lambda d: key in d, element_item['Attributes'])))
+
+    try:
+        index = res.index("processingDate")
+        processingDate = element_item['Attributes'][index]['Value']
+    except ValueError:
+        LOG.error("'processorVersion' not found in the list of Attributes")
+        processingDate = None
+    return processingDate
+
+
+def get_endingDateTime(element_item):
+    """endingDateTime is the first acquisition date on the .SAFE name"""
+    key = 'Name'
+    res = list(map(lambda d: d.get(key), filter(lambda d: key in d, element_item['Attributes'])))
+
+    try:
+        index = res.index("endingDateTime")
+        endingDateTime = element_item['Attributes'][index]['Value']
+    except ValueError:
+        LOG.error("'processorVersion' not found in the list of Attributes")
+        endingDateTime = None
+    return endingDateTime
+
+
+def filter_latest_processing(element):
+    acquisition_dict = {}
+
+    for item in element:
+        acquisition_date = get_endingDateTime(item).split('.')[0]  #split to ignore the milliseconds differences
+        processing_date = get_processingDate(item).split('.')[0]
+
+        if acquisition_date in acquisition_dict:
+            if processing_date > acquisition_dict[acquisition_date]["processing_date"]:
+                acquisition_dict[acquisition_date] = {"item": item, "processing_date": processing_date}
+        else:
+            acquisition_dict[acquisition_date] = {"item": item, "processing_date": processing_date}
+
+    return [entry["item"] for entry in acquisition_dict.values()]
+
+
 # =======================================================================#
 # - Queries thi CREODIAS API to search data for specific year and month
 # - Creates subset/mosaic for every day when acquisitions have been found
@@ -350,7 +409,6 @@ def main(OUTPUT_DIR, geojson_fname):
                 'R60m': ['B01', 'SCL'],
                 'QI_DATA': ['MSK_CLDPRB_20m']}
 
-    cloud_cover_le = 30
     OUTPUT_DIR= create_dir(OUTPUT_DIR, 'Sentinel')
     OUTPUTDIR = create_dir(OUTPUT_DIR, 'MSIL2A')
 
@@ -360,24 +418,18 @@ def main(OUTPUT_DIR, geojson_fname):
     extent = get_extent(geojson_fname)
     polygon = get_polygon(geojson_fname)
 
-    url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter="
-                 f"((Attributes/OData.CSC.DoubleAttribute/any(i0:i0/Name eq %27cloudCover%27 "
-                 f"and i0/Value le {cloud_cover_le})) and ")
+    url_start = (f"https://datahub.creodias.eu/odata/v1/Products?$filter=")
 
-    url_end = (f"(Online eq true) and "
-               f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
+    url_end = (f"(Online%20eq%20true)%20and%20(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
                f"{polygon}"
-               f"))%27)) and "
-               f"(((((Collection/Name eq %27SENTINEL-2%27) and "
-               f"(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27productType%27 "
-               f"and i0/Value eq %27S2MSI2A%27)))) and "
-               f"(((Attributes/OData.CSC.StringAttribute/any(i0:i0/Name eq %27processorVersion%27 "
-               f"and i0/Value eq %2705.00%27)) or (Attributes/OData.CSC.StringAttribute/any(i0:i0/Name "
-               f"eq %27processorVersion%27 and i0/Value eq %2705.09%27))))))))"
-               f")&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start asc&$top=200")
+               f"))%27))%20and%20(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20((("
+               f"Attributes/OData.CSC.StringAttribute/any("
+               f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI2A%27)))))))))&$expand"
+               f"=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+               )
 
     # TODO change the start and end date to get from the config file
-    for year in range(2017, 2023 + 1):
+    for year in range(2017, 2024 + 1):
         for month in range(1, 12 + 1):
             LOG.info(f'Getting MSIL2A data for {year}-{month}')
 
@@ -386,7 +438,7 @@ def main(OUTPUT_DIR, geojson_fname):
             end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
 
             url = (f"{url_start}"
-                   f"(ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
+                   f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
                    f"{url_end}")
 
             # Encode URL
@@ -394,30 +446,43 @@ def main(OUTPUT_DIR, geojson_fname):
 
             # Remove unnecessary characters from encoded URL
             url_encoded_cleared = url_encoded.replace('%0A', '')
-            # Obtain and print the response
-            response = requests.get(url_encoded_cleared)
-            response = response.json()
+
+            # Initialize the S3Paths list
+            element = []
+            # Start fetching pages
+            while url_encoded_cleared:
+                # Get the response
+                response = requests.get(url_encoded_cleared)
+                response_data = response.json()
+
+                # Extract the S3Paths from the current page, assuming they are in a field called "value"
+                element.extend(response_data.get("value", []))
+
+                # Check for the next page using @odata.nextLink
+                url_encoded_cleared = response_data.get("@odata.nextLink")
+            # Check which processing version if not 05.00 and above ignore the image
+            element = [e for e in element if float(get_processorVersion(e)) >= 5.00]
+            element = filter_latest_processing(element)
             # set unique sensing dates or acquisition dates
             # these dates includes milliseconds, it would be impossible to have
             # the same full dates with different coverage over the site
             sensing_dates = []
             S3Paths = []
-            for i, element in enumerate(response['value']):
+            for i in range(len(element)):
                 # Get acquisition date first date in the S3Path file name
-                image_name = os.path.basename(element['S3Path'])
-                sensing_date = image_name.split('_')[2]
-                # Check if the date is not already there
-                if sensing_date not in sensing_dates:
-                    sensing_dates.append(sensing_date)
-                    S3Paths.append(element['S3Path'])
+                image_name = element[i]['Name']
+                # Get acquisition date first date in the S3Path file name
+                acquisition_date = get_endingDateTime(element[i])  # dtype: str
+                sensing_dates.append(acquisition_date)
+                S3Paths.append(element[i]['S3Path'])
 
                 new_dir = os.path.join(OUTPUTDIR, image_name)
                 try:
-                    os.symlink(element['S3Path'], new_dir,
+                    os.symlink(element[i]['S3Path'], new_dir,
                                target_is_directory=True)
 
                 except FileExistsError:
-                    LOG.info(f"{element['S3Path']} already exists")
+                    LOG.info(f"{element[i]['S3Path']} already exists")
 
             if len(S3Paths) > 0:
 
@@ -427,7 +492,7 @@ def main(OUTPUT_DIR, geojson_fname):
                 with open(pickle_fname, 'wb') as file:
                     pickle.dump(sensing_dates, file)
             else:
-                LOG.info(f'Data not available for {year}-{month} with this cloud coverage filter {cloud_cover_le}')
+                LOG.info(f'Data not available for {year}-{month}')
                 continue
 
             # Create daily VRTs

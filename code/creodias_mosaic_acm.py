@@ -568,8 +568,8 @@ def main(OUTPUT_DIR, geojson_fname):
         for i in range(len(element)):
 
             # Get acquisition date first date in the S3Path file name
-            end_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
-            sensing_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
+            sensing_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
+            sensing_date = datetime.strptime(sensing_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
 
             image_name = element[i]['Name']
 

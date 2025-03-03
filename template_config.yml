@@ -42,7 +42,7 @@
     data_var: ['_Albedo_WSA_Band2']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
-    period: '23'
+    period: '45'
   - name: Net EvapoTranspiration (ET)
     product: MOD16A2GF.061
     platform: MOLT
@@ -51,6 +51,11 @@
     data_var: ['_ET_500m']
     smooth_method: 'smoothn'
     smooth_factor: '0.5'
+    period: '45'
+  - name: Albedo snow cover
+    product: MCD43A2.061
+    platform: MOTA
+    data_var: ['Snow_BRDF_Albedo']
     period: '45'
   - name: Burned Areas (BA)
     product: MCD64A1.061

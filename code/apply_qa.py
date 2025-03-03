@@ -1,4 +1,3 @@
-
 import json
 import collections
 import glob
@@ -64,7 +63,7 @@ def main(site_directory, qa_path):
                 snow_path = glob.glob(os.path.join(site_directory,
                                                    f'MODIS/MCD43A2.061/*/Snow_BRDF_Albedo/MCD43A2.{timestep}.*.tif'))
 
-                if snow_path is not None:
+                if snow_path:
                     snow_path = snow_path[0]
                     LOG.info(f'Corresponding snow path used {snow_path}')
                 else:
@@ -86,7 +85,7 @@ def main(site_directory, qa_path):
 
                 # Apply the mask: Keep albedo where snow == 1, else set to 32767 (fill value)
                 LOG.info('Applying snow cover mask')
-                masked_albedo = np.where(snow_arr != 1, albedo_arr, 32767)
+                masked_albedo = np.where(snow_arr != 1, albedo_arr, np.nan)
 
                 # Write the updated masked data back to the raster
                 LOG.info('Writing the new masked albedo layer')
@@ -119,6 +118,7 @@ def main(site_directory, qa_path):
                 qa_json = os.path.join(
                     qa_path, f"{product}.{version}_{qa_def}.json"
                 )
+
                 LOG.info(f'following qa settings in {qa_json}')
                 # check if a qa_file exists in this directory
                 if not os.path.exists(qa_json):

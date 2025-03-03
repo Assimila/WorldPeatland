@@ -1,4 +1,4 @@
-import glob
+from glob import glob
 import numpy as np
 import xarray as xr
 from osgeo import gdal
@@ -8,9 +8,10 @@ from itertools import chain
 from collections import defaultdict
 import logging
 import sys
-
+import matplotlib.pyplot as plt
+import pandas as pd
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, gdal_stack_dt, get_proj4_from_tif
+from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, _get_times, get_proj4_from_tif, _get_FillValue
 from WorldPeatland.code.utils import create_dir, get_timestep_from_tif
 from WorldPeatland.code.smoothn import smoothn
 
@@ -56,7 +57,7 @@ def create_xr(fdict):
 def apply_threshold(ds):
     for var_name in ds.data_vars:
         if var_name.startswith('V'):
-            ds[var_name] = ds[var_name].where(ds[var_name] > -30, np.nan)
+            ds[var_name] = ds[var_name].where(ds[var_name] > -30, 999)  # _FillValue = 999 of Sentinel 1
     return ds
 
 
@@ -79,29 +80,6 @@ def calc_cr(ds):
     return ds
 
 
-def transform_save(orbit, saved_path):
-    # save_xarray can only save one variable
-    # do we create a new one that can fit more than one variable?
-    # because need to save observation and cross ratio 
-    # ==>> maybe try to save xarray with many variables for each orbit.
-    # 'ex: ascending orbit has a xarray with cross ratio, VV and VH'
-    output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
-    #     save_xarray_old(output_utm, ds, 'cr')
-
-    # change projection from utm to sinusoidal 
-    output_sinu = saved_path + f'/cross_ratio_{orbit}_sinusoidal_resampled.tif'
-    proj4_string = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
-    ds = gdal.Open(output_utm)
-
-    # reproject to sinusoidal and resample to 10 by 10 pixel size
-    gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
-
-    # delete utm files
-    os.remove(output_utm)
-
-    return output_sinu
-
-
 def group_tifs_by_date(site_fpath, orbit):
     """
     Groups `.tif` files by their timestep (date) based on the provided directory and orbit.
@@ -118,7 +96,7 @@ def group_tifs_by_date(site_fpath, orbit):
 
     # Get a flattened list of all `.tif` file paths for the corresponding bands
     flat_list = list(chain.from_iterable(
-        sorted(glob.glob(f'{site_fpath}/%s/*/*.tif' % band)) for band in bands
+        sorted(glob(f'{site_fpath}/%s/*/*.tif' % band)) for band in bands
     ))
 
     # Initialize a default dict to hold lists of file paths for each date
@@ -165,6 +143,9 @@ def dw_smoothn_smooth_xarray(in_ds, var2smooth, window, isrobust):
     # Apply smoothn
     smooth_ar = smoothn(y=in_ds[var2smooth].values, s=window, isrobust=isrobust, axis=0)[0]
 
+    # Convert to float32 before returning
+    smooth_ar = smooth_ar.astype(np.float32)
+
     # Return the smoothed dataset
     return xr.Dataset(
         data_vars={
@@ -191,6 +172,7 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     longitude_chunks = range(0, dask_dataset.longitude.size, block_size)
 
     smoothed_blocks = []
+    # smoothed_blocks=glob(f'{output_dir}/*.nc')
     with ProgressBar():
         for lat_start in latitude_chunks:
             for lon_start in longitude_chunks:
@@ -211,16 +193,14 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     LOG.info('Finish processing all blocks')
     # Recombine the saved blocks
     LOG.info('Opening all smoothed blocks nc in one xarray')
-    smoothed_datasets = xr.open_mfdataset(smoothed_blocks)
-    # smoothed_datasets = [xr.open_dataset(path) for path in smoothed_blocks]
-    # combined = xr.combine_by_coords(smoothed_datasets)
+    smoothed_datasets = xr.open_mfdataset(smoothed_blocks, chunks={"latitude": 256, "longitude": 256})
     LOG.info('Smoothened blocks successfully combined')
-    return smoothed_datasets
+    return smoothed_datasets  # xarr dataset
 
 
 def main(site_fpath):
 
-    orbits = ['ASCENDING', 'DESCENDING']
+    orbits = ['ASCENDING','DESCENDING']  #
 
     for orbit in orbits:
 
@@ -248,20 +228,45 @@ def main(site_fpath):
                     files_dict["angle"] = file
 
             ds = create_xr(files_dict)
+            # Threshold for backscatter values not angular values
             _ds = apply_threshold(ds)
 
-            # TODO separate per angles??
-            LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
-            ds_cr = calc_cr(_ds)
-            LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
+            # get the angular information distribution
+            a = ds.angle.values
+            LOG.info(f'Check with that the histogram printed is following a binomial distribution')
+            LOG.info(f'Check that this mean value of {np.nanmean(a)} is in the middle of the angles ')
+            plt.hist(a.flatten(), bins=30, edgecolor='black')
+            plt.show()
+            angular_threshold = np.nanmean(a)
 
-            # TODO think about if 2 zones for one site
-            # then will have to get the zone that is covering the largest area
-            proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
+            # Create a condition where angle is less than angular_threshold
+            condition = _ds.angle < angular_threshold
+            # Use where to drop values based on the condition (drop NaNs where condition is false)
+            ds_o1 = _ds.where(condition, drop=True)
 
-            output_utm = output_dir + f'/cross_ratio_{orbit}_utm_{timestep}.tif'
-            monthly_outputs.append(output_utm)
-            save_xarray_old(output_utm, ds_cr, 'cr')
+            # Create a condition
+            condition = _ds.angle > angular_threshold
+            # Use where to drop values based on the condition (drop NaNs where condition is false)
+            ds_o2 = _ds.where(condition, drop=True)
+
+            for ds_subset, angle_label in [(ds_o1, 'angle1'), (ds_o2, 'angle2')]:
+                LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit - {angle_label}')
+
+                ds_cr = calc_cr(ds_subset)
+                LOG.info(f'{timestep} Cross ratio {orbit} for {angle_label} successfully calculated')
+
+                # TODO: Handle cases where one site has two zones
+                proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
+
+                opn = gdal.Open(file)
+                fill_value = _get_FillValue(opn)
+                ds_cr.attrs['fill_value'] = fill_value
+
+                output_dir_ang = create_dir(output_dir, angle_label)
+                output_utm = f'{output_dir_ang}/cross_ratio_{orbit}_utm_{timestep}.tif'
+
+                monthly_outputs.append(output_utm)
+                save_xarray_old(output_utm, ds_cr, 'cr')
 
             # # change projection from utm to sinusoidal
             #       output_sinu = transform_save(ds_cr, orbit, saved_path)
@@ -271,14 +276,19 @@ def main(site_fpath):
             #       arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
             #       ds = create_xarr(saved_opn, 'cr', arr, dts)
 
-        # open all cross ratio tiffs and put in one xarray
-        stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
+        # open all cross ratio tiffs and put in one xarray to be able to smoothn
+        # stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
+        list_xr = []
+        for fpath in monthly_outputs:
+            ds = xr.open_dataset(fpath, chunks={"latitude": 256, "longitude": 256})
+            # Rename dimensions
+            ds = ds.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time', 'band_data': 'cr'})
+            times = _get_times(fpath)
+            ds['time'] = times.time.values
+            list_xr.append(ds)
+        ds_all_years = xr.concat(list_xr, dim='time')
 
         LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
-        ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
-        del stacked_arr
-        del dts
-        del saved_opn
 
         # smoothn should happen on all the time series per orbit
         # Chunk the dataset to enable Dask computation
@@ -300,7 +310,7 @@ def main(site_fpath):
 
         LOG.info('The dask chunks have been smoothened')
         smoothed_result.attrs['crs'] = proj4_string
-
+        smoothed_result.attrs['fill_value'] = fill_value
         output_ts_dir = create_dir(output_dir, 'timeSeries')
         fname = output_ts_dir + f'/cross_ratio_{orbit}_utm_smoothn.tif'
         save_xarray_old(fname, smoothed_result, f'cr')

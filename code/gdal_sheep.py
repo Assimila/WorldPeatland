@@ -6,9 +6,54 @@ import xarray as xr
 import subprocess
 import re
 import logging
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
+
+
+def _get_FillValue(opn):
+    """
+    Get _FillValue from band 1 (Randomly should all be the same)
+    """
+
+    b = opn.GetRasterBand(1)
+    meta = b.GetMetadata()
+    x = None
+
+    keys = ['_FillValue', 'fill_value']
+    for key in keys:
+        if key in meta:
+            x = meta[key]
+            break
+    else:
+        raise KeyError("No valid fill value key found in metadata.")
+
+    return x
+
+def _get_times(tif_path):
+    """
+    Get date/time from per-band metadata
+    """
+    d = gdal.Open(tif_path)
+    n_bands = d.RasterCount
+
+    times = []
+
+    for n_band in range(n_bands):
+        b = d.GetRasterBand(n_band+1)
+        md = b.GetMetadata()
+
+        time = md['time']
+        times.append(time)
+
+    # Convert list to DataFrame
+    times = pd.DataFrame(times, columns = ['time'])
+    # Change data type to np.datetime64
+    times.time = pd.to_datetime(times['time'],
+                                format='%Y-%m-%dT%H:%M:%S').to_numpy()
+
+    return times
 
 
 def gdal_dt(e):
@@ -55,6 +100,7 @@ def gdal_dt(e):
 
         # Possible datetime formats to try
         dt_formats = [
+            '%Y-%m-%dT%H:%M:%S.%f000',
             '%Y-%m-%dT%H:%M:%S.000000000',
             '%Y-%m-%d %H:%M:%S',
             '%Y-%m-%d'
@@ -386,3 +432,26 @@ def get_proj4_from_tif(tif_file, xarray=None):
 
     except Exception as e:
         raise RuntimeError(f"An error occurred while extracting the PROJ.4 string: {e}")
+
+
+def transform_save(orbit, saved_path):
+    # save_xarray can only save one variable
+    # do we create a new one that can fit more than one variable?
+    # because need to save observation and cross ratio
+    # ==>> maybe try to save xarray with many variables for each orbit.
+    # 'ex: ascending orbit has a xarray with cross ratio, VV and VH'
+    output_utm = saved_path + f'/cross_ratio_{orbit}_utm.tif'
+    #     save_xarray_old(output_utm, ds, 'cr')
+
+    # change projection from utm to sinusoidal
+    output_sinu = saved_path + f'/cross_ratio_{orbit}_sinusoidal_resampled.tif'
+    proj4_string = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
+    ds = gdal.Open(output_utm)
+
+    # reproject to sinusoidal and resample to 10 by 10 pixel size
+    gdal.Warp(output_sinu, ds, dstSRS=proj4_string, xRes=10, yRes=10)
+
+    # delete utm files
+    os.remove(output_utm)
+
+    return output_sinu

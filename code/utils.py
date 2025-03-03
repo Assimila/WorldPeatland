@@ -2,6 +2,8 @@ import re
 import logging
 import sys
 import os
+from osgeo import osr
+import yaml
 
 sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
@@ -85,3 +87,14 @@ def read_config(config_fname):
     # Information about the first EO data product to download list index 1
     products = data[1]['products']
     return start_date, end_date, products
+
+
+def proj4_extract(opn):
+
+    # get spatial reference from opn dataset
+    proj_wkt = opn.GetProjection()
+    spatial_ref = osr.SpatialReference()
+    spatial_ref.ImportFromWkt(proj_wkt)
+    proj4_string = spatial_ref.ExportToProj4()
+
+    return proj4_string

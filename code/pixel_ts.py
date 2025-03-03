@@ -1,12 +1,12 @@
 
-import glob
+from glob import glob
 import os
 import sys
 from datetime import datetime as dt
 import logging
 from osgeo import gdal
 from WorldPeatland.code.download_modis import create_dir, read_config
-from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt
+from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt, _get_FillValue
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 
 LOG = logging.getLogger(__name__)
@@ -14,17 +14,6 @@ LOG.setLevel(logging.DEBUG)
 
 
 '''pixel_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
-
-
-def _get_FillValue(opn):
-    """
-    Get _FillValue from band 1 (Randomly should all be the same)
-    """
-
-    b = opn.GetRasterBand(1)
-    md = b.GetMetadata()
-
-    return md['_FillValue']
 
 
 def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
@@ -64,7 +53,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
 
     base, extension = os.path.splitext(os.path.basename(path))
 
-    path_analytics = create_dir(site_directory + '/MODIS/', 'timeSeries')
+    path_analytics = create_dir(site_directory + 'MODIS/', 'timeSeries')
     
     # period dictionary in days according to the data_var
     # period = 365/temporal resolution of the layer 
@@ -104,7 +93,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
 
 def main(site_directory, value):
 
-    config = glob.glob(site_directory + f'/*_config.yml') 
+    config = glob(site_directory + f'/*_config.yml')
     config_fname = config[0]
     start_date, end_date, products = read_config(config_fname)
     
@@ -124,7 +113,7 @@ def main(site_directory, value):
             pattern = (
                     site_directory +
                     f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif')
-            path = glob.glob(pattern)[0] 
+            path = glob(pattern)[0]
             
             LOG.info(f'Processing this file {path}')
 

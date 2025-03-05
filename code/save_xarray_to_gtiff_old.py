@@ -120,10 +120,10 @@ def save_xarray_old(fname, xarray, data_var):
     keys = ['_FillValue', 'fill_value']
     for key in keys:
         if key in xarray.attrs:
-            _FillValue = xarray.attrs[key]
+            _FillValue = float(xarray.attrs[key])
             break
     else:
-        _FillValue = np.nan  # Default to NaN if not specified
+        _FillValue = float(np.nan)  # Default to NaN if not specified
         print("No valid fill value key found in metadata, fill value set as nan.")
 
     for layer in range(layers):
@@ -137,7 +137,9 @@ def save_xarray_old(fname, xarray, data_var):
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
         #TODO check what happens if _FillValue not specified
-        dst_band.SetMetadataItem('_FillValue', _FillValue)
+
+        # _FillValue has to be a float
+        dst_band.SetNoDataValue(_FillValue)
 
         # Check if data is a Dask array
         if isinstance(_xarray[layer].data, da.Array):

@@ -12,9 +12,21 @@ logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
 
+def get_NoDataValue(opn):
+    """
+    Get the Nodata value if set using SetNoDataValue
+    """
+
+    band = opn.GetRasterBand(1)
+    nodata_value = band.GetNoDataValue()
+
+    return nodata_value
+
+
 def _get_FillValue(opn):
     """
     Get _FillValue from band 1 (Randomly should all be the same)
+    if set in written in band metadata
     """
 
     b = opn.GetRasterBand(1)

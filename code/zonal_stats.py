@@ -13,10 +13,20 @@ import matplotlib
 matplotlib.use('nbAgg')
 from rasterstats import zonal_stats
 from WorldPeatland.code.download_modis import create_dir
-from WorldPeatland.code.gdal_sheep import _get_FillValue
+from WorldPeatland.code.gdal_sheep import get_NoDataValue
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
+
+
+""" 
+Steps to do before running this:
+- Make sure that the shapefile has one geometry otherwise the zonal stats will be calculated over each geometry
+- the shapefile and the tif files needs to be in the same coordinate system, can use this command line:
+
+ogr2ogr -t_srs "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs" <output shp> <input shp>
+
+"""
 
 
 def calc_zonal_stat(data_tif_path, shapefile_path):
@@ -26,7 +36,7 @@ def calc_zonal_stat(data_tif_path, shapefile_path):
     bands = list(range(opn.RasterCount))
 
     # get fill value from opn
-    _FillValue = _get_FillValue(opn)
+    _FillValue = get_NoDataValue(opn)
     # Create an empty list to store the zonal statistics data
     l = []
     # Loop over all the bands in the tif, extract the zonal stat of each band
@@ -89,7 +99,8 @@ def main(site_directory, shapefile_path):
         df.set_index('Dates', inplace=True)
 
         # create pkl_filename from tif_filename
-        pkl_filename = tif_filename.replace('.tif', '.zonalStats.pkl')
+        pkl_filename = tif_filename.replace('.tif', '').replace('.', '_') + '.zonalStats.pkl'
+
         # save the raw zonal stat in a pickle file
         output_path = create_dir(modis_timeSeries_path, 'ZonalStats')
         output_path = os.path.join(output_path, pkl_filename)

@@ -6,6 +6,7 @@ from osgeo import gdal, ogr, osr
 import tempfile
 from pathlib import Path
 import pandas as pd
+from datetime import datetime
 import json
 from pyproj import Transformer
 from calendar import monthrange
@@ -170,6 +171,12 @@ def get_crs(fname):
     return proj
 
 
+import os
+import logging
+
+LOG = logging.getLogger(__name__)
+
+
 def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, product='S2_SR'):
     """
     Create mosaics for daily set of Sentinel-2 acquisitions
@@ -177,39 +184,48 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
     # Dictionary to store all outputs per dataset-band
     outputs = {}
 
-    # Find all images for a particular day
     for day in range(1, days + 1):
+        try:
+            # Format the date string
+            date = f"MSIL2A_{year:04}{month:02}{day:02}"  # Ensure year is 4 digits
+            LOG.info(f'Processing vrts for {date}')
 
-        # Better pattern to search for the first date is the date when the image was taken
-        date = f"MSIL2A_{year:04}{month:02}{day:02}"  # Ensure year is 4 digits
-        LOG.info(f'Processing vrts for {date}')
-        images = [img for img in S3Paths if date in img]
+            # Filter images by date
+            images = [img for img in S3Paths if date in img]
 
-        if len(images) == 0:
-            images = []
+            if not images:
+                LOG.warning(f'No images found for {date}, skipping...')
+                continue
+
+            # Process each dataset and band
+            for dataset in datasets:
+                for band in datasets[dataset]:
+                    try:
+                        if band == 'MSK_CLDPRB_20m':
+                            img_path = f'GRANULE/*/{dataset}/*{band}*.jp2'
+                        else:
+                            img_path = f'GRANULE/*/*_DATA/{dataset}/*{band}*.jp2'
+
+                        output_dir = os.path.join(OUTPUTDIR, 'datacube', product, band)
+                        output_dir = create_dir(output_dir, 'VRTs')
+
+                        images_path = [os.path.join(img, img_path) for img in images]
+
+                        output_fnames = create_subset(images_path, output_dir, extent, band)
+
+                        if band in outputs:
+                            outputs[band].append(output_fnames)
+                        else:
+                            outputs[band] = [output_fnames]
+
+                    except Exception as band_error:
+                        LOG.error(f"Error processing band '{band}' on {date}: {band_error}")
+                        continue
+
+        except Exception as day_error:
+            LOG.error(f"Error processing day {day}: {day_error}")
             continue
-        # If there is a single image just subset 
-        for dataset in datasets:
-            for band in datasets[dataset]:
-                if band == 'MSK_CLDPRB_20m':
-                    img_path = f'GRANULE/*/{dataset}/*{band}*.jp2'
-                else:
-                    img_path = f'GRANULE/*/*_DATA/{dataset}/*{band}*.jp2'
-                output_dir = os.path.join(OUTPUTDIR, 'datacube',
-                                          product, band)
-                output_dir = create_dir(output_dir, 'VRTs')
 
-                images_path = []
-                for i in range(len(images)):
-                    images_path.append(os.path.join(images[i], img_path))
-
-                output_fnames = create_subset(images_path,
-                                             output_dir, extent, band)
-
-                if band in outputs:
-                    outputs[band].append(output_fnames)
-                else:
-                    outputs[band] = [output_fnames]
     return outputs
 
 
@@ -359,10 +375,25 @@ def get_processingDate(element_item):
 
     try:
         index = res.index("processingDate")
-        processingDate = element_item['Attributes'][index]['Value']
+        processingDate = element_item['Attributes'][index]['Value'].split('.')[0]
     except ValueError:
-        LOG.error("'processorVersion' not found in the list of Attributes")
+        LOG.error("'processingDate' not found in the list of Attributes")
         processingDate = None
+
+    # Fallback to extracting date from S3Path if not found in Attributes
+    if not processingDate:
+        s3_path = element_item.get('S3Path', '')
+        if s3_path:
+            try:
+                # Extract the date portion from the S3 path
+                raw_date = os.path.basename(s3_path).split('.')[0].split('_')[-1]  # e.g., 20240520T040936
+                # Convert it to the desired format
+                dt = datetime.strptime(raw_date, '%Y%m%dT%H%M%S')
+                processingDate = dt.strftime('%Y-%m-%dT%H:%M:%S')
+
+            except IndexError:
+                LOG.error("Failed to extract date from S3Path")
+                processingDate = None
     return processingDate
 
 
@@ -384,8 +415,8 @@ def filter_latest_processing(element):
     acquisition_dict = {}
 
     for item in element:
-        acquisition_date = get_endingDateTime(item).split('.')[0]  #split to ignore the milliseconds differences
-        processing_date = get_processingDate(item).split('.')[0]
+        acquisition_date = get_endingDateTime(item).split('.')[0]  # split to ignore the milliseconds differences
+        processing_date = get_processingDate(item)
 
         if acquisition_date in acquisition_dict:
             if processing_date > acquisition_dict[acquisition_date]["processing_date"]:
@@ -429,7 +460,7 @@ def main(OUTPUT_DIR, geojson_fname):
                )
 
     # TODO change the start and end date to get from the config file
-    for year in range(2017, 2024 + 1):
+    for year in range(2022, 2024 + 1):
         for month in range(1, 12 + 1):
             LOG.info(f'Getting MSIL2A data for {year}-{month}')
 

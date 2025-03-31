@@ -171,12 +171,6 @@ def get_crs(fname):
     return proj
 
 
-import os
-import logging
-
-LOG = logging.getLogger(__name__)
-
-
 def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, product='S2_SR'):
     """
     Create mosaics for daily set of Sentinel-2 acquisitions
@@ -204,7 +198,7 @@ def create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, days, extent, p
                         if band == 'MSK_CLDPRB_20m':
                             img_path = f'GRANULE/*/{dataset}/*{band}*.jp2'
                         else:
-                            img_path = f'GRANULE/*/*_DATA/{dataset}/*{band}*.jp2'
+                            img_path = f'GRANULE/*/IMG_DATA/{dataset}/*{band}*.jp2'
 
                         output_dir = os.path.join(OUTPUTDIR, 'datacube', product, band)
                         output_dir = create_dir(output_dir, 'VRTs')
@@ -281,77 +275,92 @@ def get_metadata_path(time, S3Paths):
 
 def create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths, product='S2_SR'):
     """
-    Create monthly DataCube COGs
+    Create monthly DataCube COGs with error handling.
     """
     for dataset in outputs:
-        # Check srs of the time steps in a month
-        output_dir = os.path.join(OUTPUTDIR, 'datacube', product, dataset)
-        outputs[dataset] = check_srs(outputs[dataset], output_dir)
-        # Get unique filename and check it doesnt exist in tmp_path
-        f = tempfile.NamedTemporaryFile(mode='w+b', delete=True,
-                                        dir='/tmp', suffix=".vrt")
-        output_vrt_fname = f.name
+        try:
+            # Check SRS of the time steps in a month
+            output_dir = os.path.join(OUTPUTDIR, 'datacube', product, dataset)
 
-        build_options = gdal.BuildVRTOptions(separate=True)
-        vrt = gdal.BuildVRT(output_vrt_fname, outputs[dataset],
-                            options=build_options)
-        for i in range(vrt.RasterCount):
-
-            _time = outputs[dataset][i]
-            _time = os.path.basename(_time)
-            if dataset == 'MSK_CLDPRB_20m':
-                _time = _time.split('_')[3]
-            else:
-                _time = _time.split('_')[1]
-
-            band = vrt.GetRasterBand(i + 1)
-
-            if not dataset == 'MSK_CLDPRB_20m':
-
-                metadata = get_metadata_path(_time, S3Paths)
-
-                if metadata:
-
-                    sza, saa, vza, vaa = get_angle(metadata)
-                    band.SetMetadataItem('saa', saa)
-                    band.SetMetadataItem('sza', sza)
-                    band.SetMetadataItem('vza', vza)
-                    band.SetMetadataItem('vaa', vaa)
-
-                    metadata = None
-                else:
-                    LOG.error('azimuth angle not found')
-            else:
-                # If the dataset is MSK_CLDPRB ignore the angles because of different file paths
-                # anw it is the same values throughout the bands no need to have it in here too
+            try:
+                outputs[dataset] = check_srs(outputs[dataset], output_dir)
+            except Exception as e:
+                LOG.error(f"Error in check_srs for {dataset}: {e}")
                 continue
 
-            _time = str(pd.to_datetime(_time, format='%Y%m%dT%H%M%S'))
+            # Create temporary VRT
+            try:
+                f = tempfile.NamedTemporaryFile(mode='w+b', delete=True, dir='/tmp', suffix=".vrt")
+                output_vrt_fname = f.name
 
-            band.SetMetadataItem('add_offset', '0')
-            band.SetMetadataItem('fill_value', '999')
-            band.SetMetadataItem('product', product)
-            band.SetMetadataItem('scale_factor', '1.0')
-            band.SetMetadataItem('time', _time)
-            band.SetMetadataItem('version', 'Sentinel-2_L2_Sen2Cor')
+                build_options = gdal.BuildVRTOptions(separate=True)
+                vrt = gdal.BuildVRT(output_vrt_fname, outputs[dataset], options=build_options)
 
-        del vrt
+            except Exception as e:
+                LOG.error(f"Failed to build VRT for {dataset}: {e}")
+                continue
 
-        translate_options = gdal.TranslateOptions(format='GTiff')
+            # Add metadata to bands
+            try:
+                for i in range(vrt.RasterCount):
+                    _time = os.path.basename(outputs[dataset][i])
 
-        # Get output dir from first VRT
-        output_dir = Path(outputs[dataset][0])
-        output_dir = str(output_dir.parent.parent.absolute())
-        # Output file name
-        output_cog_fname = f'{product}_{dataset}_{year}-{month:02}.tif'
-        output_cog_fname = os.path.join(output_dir, output_cog_fname)
+                    if dataset == 'MSK_CLDPRB_20m':
+                        _time = _time.split('_')[3]
+                    else:
+                        _time = _time.split('_')[1]
 
-        tmp_ds = gdal.Translate(output_cog_fname, output_vrt_fname,
-                                options=translate_options)
-        LOG.info(f'COG {output_cog_fname} successfully saved')
-        # Clean tmp variables
-        del tmp_ds
-        del f
+                    band = vrt.GetRasterBand(i + 1)
+
+                    if dataset != 'MSK_CLDPRB_20m':
+                        metadata = get_metadata_path(_time, S3Paths)
+
+                        if metadata:
+                            try:
+                                sza, saa, vza, vaa = get_angle(metadata)
+                                band.SetMetadataItem('saa', saa)
+                                band.SetMetadataItem('sza', sza)
+                                band.SetMetadataItem('vza', vza)
+                                band.SetMetadataItem('vaa', vaa)
+                            except Exception as e:
+                                LOG.error(f"Failed to get angle metadata for {dataset}: {e}")
+                        else:
+                            LOG.error('Azimuth angle not found')
+
+                    _time = str(pd.to_datetime(_time, format='%Y%m%dT%H%M%S'))
+
+                    band.SetMetadataItem('add_offset', '0')
+                    band.SetMetadataItem('fill_value', '999')
+                    band.SetMetadataItem('product', product)
+                    band.SetMetadataItem('scale_factor', '1.0')
+                    band.SetMetadataItem('time', _time)
+                    band.SetMetadataItem('version', 'Sentinel-2_L2_Sen2Cor')
+
+                del vrt
+
+            except Exception as e:
+                LOG.error(f"Error processing bands for {dataset}: {e}")
+                continue
+
+            # Translate VRT to COG
+            try:
+                translate_options = gdal.TranslateOptions(format='GTiff')
+                output_dir = Path(outputs[dataset][0]).parent.parent.absolute()
+                output_cog_fname = f'{product}_{dataset}_{year}-{month:02}.tif'
+                output_cog_fname = os.path.join(str(output_dir), output_cog_fname)
+
+                tmp_ds = gdal.Translate(output_cog_fname, output_vrt_fname, options=translate_options)
+                LOG.info(f'COG {output_cog_fname} successfully saved')
+
+                del tmp_ds
+                del f
+
+            except Exception as e:
+                LOG.error(f"Failed to create COG for {dataset}: {e}")
+                continue
+
+        except Exception as e:
+            LOG.error(f"Unexpected error in create_monthly_cogs for {dataset}: {e}")
 
 
 def get_processorVersion(element_item):
@@ -460,76 +469,81 @@ def main(OUTPUT_DIR, geojson_fname):
                )
 
     # TODO change the start and end date to get from the config file
-    for year in range(2022, 2024 + 1):
+    for year in range(2017, 2024 + 1):
         for month in range(1, 12 + 1):
-            LOG.info(f'Getting MSIL2A data for {year}-{month}')
+            try:
 
-            start_date = f'{year}-{month:02}-01T00:00:00.000Z'
-            end_day = monthrange(year, month)[1]
-            end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
+                LOG.info(f'Getting MSIL2A data for {year}-{month}')
 
-            url = (f"{url_start}"
-                   f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
-                   f"{url_end}")
+                start_date = f'{year}-{month:02}-01T00:00:00.000Z'
+                end_day = monthrange(year, month)[1]
+                end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
 
-            # Encode URL
-            url_encoded = requote_uri(url)
+                url = (f"{url_start}"
+                    f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
+                    f"{url_end}")
 
-            # Remove unnecessary characters from encoded URL
-            url_encoded_cleared = url_encoded.replace('%0A', '')
+                # Encode URL
+                url_encoded = requote_uri(url)
 
-            # Initialize the S3Paths list
-            element = []
-            # Start fetching pages
-            while url_encoded_cleared:
-                # Get the response
-                response = requests.get(url_encoded_cleared)
-                response_data = response.json()
+                # Remove unnecessary characters from encoded URL
+                url_encoded_cleared = url_encoded.replace('%0A', '')
 
-                # Extract the S3Paths from the current page, assuming they are in a field called "value"
-                element.extend(response_data.get("value", []))
+                # Initialize the S3Paths list
+                element = []
+                # Start fetching pages
+                while url_encoded_cleared:
+                    # Get the response
+                    response = requests.get(url_encoded_cleared)
+                    response_data = response.json()
 
-                # Check for the next page using @odata.nextLink
-                url_encoded_cleared = response_data.get("@odata.nextLink")
-            # Check which processing version if not 05.00 and above ignore the image
-            element = [e for e in element if float(get_processorVersion(e)) >= 5.00]
-            element = filter_latest_processing(element)
-            # set unique sensing dates or acquisition dates
-            # these dates includes milliseconds, it would be impossible to have
-            # the same full dates with different coverage over the site
-            sensing_dates = []
-            S3Paths = []
-            for i in range(len(element)):
-                # Get acquisition date first date in the S3Path file name
-                image_name = element[i]['Name']
-                # Get acquisition date first date in the S3Path file name
-                acquisition_date = get_endingDateTime(element[i])  # dtype: str
-                sensing_dates.append(acquisition_date)
-                S3Paths.append(element[i]['S3Path'])
+                    # Extract the S3Paths from the current page, assuming they are in a field called "value"
+                    element.extend(response_data.get("value", []))
 
-                new_dir = os.path.join(OUTPUTDIR, image_name)
-                try:
-                    os.symlink(element[i]['S3Path'], new_dir,
-                               target_is_directory=True)
+                    # Check for the next page using @odata.nextLink
+                    url_encoded_cleared = response_data.get("@odata.nextLink")
+                # Check which processing version if not 05.00 and above ignore the image
+                element = [e for e in element if float(get_processorVersion(e)) >= 5.00]
+                element = filter_latest_processing(element)
+                # set unique sensing dates or acquisition dates
+                # these dates includes milliseconds, it would be impossible to have
+                # the same full dates with different coverage over the site
+                sensing_dates = []
+                S3Paths = []
+                for i in range(len(element)):
+                    # Get acquisition date first date in the S3Path file name
+                    image_name = element[i]['Name']
+                    # Get acquisition date first date in the S3Path file name
+                    acquisition_date = get_endingDateTime(element[i])  # dtype: str
+                    sensing_dates.append(acquisition_date)
+                    S3Paths.append(element[i]['S3Path'])
 
-                except FileExistsError:
-                    LOG.info(f"{element[i]['S3Path']} already exists")
+                    new_dir = os.path.join(OUTPUTDIR, image_name)
+                    try:
+                        os.symlink(element[i]['S3Path'], new_dir,
+                                target_is_directory=True)
 
-            if len(S3Paths) > 0:
+                    except FileExistsError:
+                        LOG.info(f"{element[i]['S3Path']} already exists")
 
-                # Save sensing dates as pickle
-                pickle_fname = os.path.join(OUTPUTDIR_sensing_dates, f'{year}_{month}.pkl')
-                # Open the file in binary write mode and save the set
-                with open(pickle_fname, 'wb') as file:
-                    pickle.dump(sensing_dates, file)
-            else:
-                LOG.info(f'Data not available for {year}-{month}')
-                continue
+                if len(S3Paths) > 0:
 
-            # Create daily VRTs
-            outputs = create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, end_day, extent)
-            # Create monthly COGs
-            create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths)
+                    # Save sensing dates as pickle
+                    pickle_fname = os.path.join(OUTPUTDIR_sensing_dates, f'{year}_{month}.pkl')
+                    # Open the file in binary write mode and save the set
+                    with open(pickle_fname, 'wb') as file:
+                        pickle.dump(sensing_dates, file)
+                else:
+                    LOG.info(f'Data not available for {year}-{month}')
+                    continue
+
+                # Create daily VRTs
+                outputs = create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, end_day, extent)
+                # Create monthly COGs
+                create_monthly_cogs(outputs, OUTPUTDIR, year, month, S3Paths)
+            except Exception as e:
+                LOG.error(f'Error processing {month}-{year}')
+
     LOG.info('End of Processing for all years')
 
 

@@ -131,8 +131,11 @@ def check_srs(img_list, output_dir):
 def create_subset(input_dirs, output_dir, extent, band):
     for i in range(len(input_dirs)):
         fname = glob(input_dirs[i])
+        LOG.info(f"Checking {input_dirs[i]}: Found {len(fname)} paths")
         if len(fname) > 0:
             input_dirs[i] = fname[0]
+        else:
+            LOG.warning(f"No paths found for {input_dirs[i]}")
 
     if band == 'MSK_CLDPRB_20m':
         _fname = os.path.basename(str(Path(input_dirs[0]).parent.parent.absolute()))

@@ -173,7 +173,7 @@ def create_subset(input_dirs, output_dir, extent, band):
     options = gdal.WarpOptions(format='VRT',
                                outputBounds=extent_native_crs)
 
-    vrt = gdal.Warp(output_fname, input_dirs, options=options)
+    vrt = gdal.Warp(output_fname, fname, options=options)
 
     vrt = None
     del vrt

@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import pickle
 import sys
 import logging
+import time
 
 from WorldPeatland.code.utils import create_dir
 LOG = logging.getLogger(__name__)
@@ -128,26 +129,46 @@ def check_srs(img_list, output_dir):
     return reproj_inputs_dirs
 
 
+def find_file(glob_pattern: str, retries: int = 8) -> str:
+    """
+    Find a single file matching the glob pattern.
+    Apply exponential backoff of (1, 2, 4, 8, ...) seconds if the file is not found.
+    This is in case the fuse.s3fs mount is temporarily unavailable.
+    """
+    for attempt in range(retries):
+        LOG.info(f'Attempt number: {attempt}')
+        fnames = glob(glob_pattern)
+        n = len(fnames)
+        if n > 1:
+            raise Exception(f"Multiple files found for pattern: {glob_pattern}")
+        elif n == 1:
+            return fnames[0]
+        elif attempt < retries - 1:
+            time.sleep(2 ** attempt)
+
+    raise Exception(f"No files found for pattern: {glob_pattern}")
+
+
 def create_subset(input_dirs, output_dir, extent, band):
     for i in range(len(input_dirs)):
-        fname = glob(input_dirs[i])
+        fname = find_file(input_dirs[i])
         LOG.info(f"Checking {input_dirs[i]}: Found {len(fname)} paths")
         if len(fname) > 0:
-            input_dirs[i] = fname[0]
+            pass
         else:
             LOG.warning(f"No paths found for {input_dirs[i]}")
 
     if band == 'MSK_CLDPRB_20m':
-        _fname = os.path.basename(str(Path(input_dirs[0]).parent.parent.absolute()))
+        _fname = os.path.basename(str(Path(fname).parent.parent.absolute()))
         output_fname = f'{_fname}_{band}'
     else:
-        output_fname = os.path.splitext(os.path.basename(input_dirs[0]))[0]
+        output_fname = os.path.splitext(os.path.basename(fname))[0]
 
     output_fname = os.path.join(output_dir, output_fname)
     output_fname = f'{output_fname}.vrt'
 
     # Get extent in native CRS
-    dst_crs = get_crs(input_dirs[0])
+    dst_crs = get_crs(fname)
     minX, minY = transform_coordinate(extent[0], extent[2],
                                       output_crs=dst_crs)
     maxX, maxY = transform_coordinate(extent[1], extent[3],

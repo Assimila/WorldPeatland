@@ -17,6 +17,13 @@ import logging
 import time
 
 from WorldPeatland.code.utils import create_dir
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s:" + logging.BASIC_FORMAT,
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
+)
+
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 

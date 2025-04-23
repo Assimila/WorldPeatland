@@ -282,6 +282,8 @@ def check_dates(start_date, end_date, sentinel_start_date):
 
 def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, project):
     """ Download through GEE S1_GRD data only"""
+
+    rel_orbit = 58
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
 
@@ -318,7 +320,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
 
                 # only download s1
                 new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area,
-                                                   rel_orbit=58)
+                                                   rel_orbit=rel_orbit)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
                 # LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
@@ -344,7 +346,8 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
 
             # only download s1
             print(geojson_path)
-            new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
+            new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area,
+                                               rel_orbit=rel_orbit)
             sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
             LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel + '/datacube/'}")

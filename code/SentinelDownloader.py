@@ -898,6 +898,8 @@ class SentinelDownloader():
         ds_a = ds.isel({'time': np.where(orbit == 'ASCENDING')[0]})
         ds_d = ds.isel({'time': np.where(orbit == 'DESCENDING')[0]})
 
+        orbit_no = self.rel_orbit
+
         for n,ds_orbit in enumerate([ds_a,ds_d]):
 
             subproduct = splt[-1].replace('.tif','') + ['_ASCENDING', '_DESCENDING'][n]
@@ -918,7 +920,7 @@ class SentinelDownloader():
                 fname_month = (str(month).split('-')[1])
                 fname_year = (str(month).split('-')[0])
 
-                fname_ext = f'{product}_{subproduct}_{tile_name}_{fname_year}-{fname_month}.tif'
+                fname_ext = f'{product}_{subproduct}_{orbit_no}_{tile_name}_{fname_year}-{fname_month}.tif'
                 dataDir = os.path.join(output_dir,product,subproduct,tile_name)
                 fname = os.path.join(dataDir, fname_ext)
                 if self.override_existing_files == False:

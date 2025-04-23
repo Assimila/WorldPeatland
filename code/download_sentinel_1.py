@@ -317,7 +317,8 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
                 LOG.info(f'Sentinel data request from {j} to {j_end}')
 
                 # only download s1
-                new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area)
+                new_dwn_files = sd.download_raw_s1(path_sentinel + '/rawdata/', manual_key=site_area,
+                                                   rel_orbit=58)
                 sd.write_raw_files_to_datacube(new_dwn_files, path_sentinel + '/datacube/')
 
                 # LOG.info(f"Sentinel data for {site_area} added to the datacube {path_sentinel +'/datacube/'}")
@@ -400,12 +401,7 @@ def read_config_cred():
 
 
 def main(geojson_path, output_dir):
-    """
-    INPUTs:
-    - geojson_path is the path of the json site it needs to contain at least name of the site
-    and country where the site is located
-    - output_dir where the user wants to the data to be downloaded
-    """
+
 
     # check if GeoJson file exists
     if not os.path.isfile(geojson_path):
@@ -428,39 +424,13 @@ def main(geojson_path, output_dir):
     LOG.info(f'{site_area} is now processing')
 
     # Create a site specific directory
-    site_directory = create_dir(output_dir, site_area)  # output_dir set by user
-
-    # Read MODIS tiles KML as layer
-    path_downloader = os.path.abspath(__file__)
-    fname = '../modis_tiles/modis_sin.kml'
-    fname = os.path.normpath(os.path.join(os.path.dirname(path_downloader), fname))
-
-    driver = ogr.GetDriverByName('KML')
-    src_kml = driver.Open(fname)
-    tiles_layer = src_kml.GetLayer()
-
-    # get intersection tiles with site_area
-    tiles = ogrIntersection(tiles_layer, polygon)
-
-    format_tiles = []
-    for i in range(len(tiles)):
-        j = format_string(tiles[i])
-        print(j)
-        format_tiles.append(j)
-
-    # create a copy of the template config file
-    config_src = './template_config.yml'
-    config_src = os.path.normpath(os.path.join(os.path.dirname(path_downloader), config_src))
-    dst_config = site_directory + f'/{site_area}_config.yml'
-
-    shutil.copyfile(config_src, dst_config)
+    site_directory = create_dir(output_dir, site_area)
+    # get the site name from site_fpath
+    config = glob.glob(site_directory + f'/*_config.yml')
+    config_fname = config[0]
 
     # read config
-    start_date, end_date, products = read_config(dst_config)
-
-    # update the new config created with the data from geojson
-    update_config(dst_config, site_area, format_tiles, polygon, country)
-
+    start_date, end_date, products = read_config(config_fname)
     # set date strings as datetime objects both get_modis and get_sentinel will need it as datetime object
     _start_date = datetime.strptime(start_date, '%Y-%m-%d')
     _end_date = datetime.strptime(end_date, '%Y-%m-%d')

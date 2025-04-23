@@ -220,25 +220,45 @@ class SentinelDownloader():
                                                       'ACM_*%s*tif'%download_key)))
             
         return new_acm_files
-        
-            
-    def download_raw_s1(self, staging_area, manual_key = None):
-        
-        # find the bounding box and download key
-        bb = self.__prep_download_bounding_box()
-        if manual_key is None:
-            download_key = self.__gen_download_key()
-        else:
+
+    def download_raw_s1(self, staging_area, manual_key=None, rel_orbit=None):
+        # Prepare bounding box
+        bounding_box = self.__prep_download_bounding_box()
+
+        # Generate or use provided download key
+        if manual_key:
             self.key = manual_key
-            download_key = self.key + '_%s'%dt.datetime.now().strftime('%Y%m%d%H%M%S')  
-            
-        s1_staging_dir = os.path.join(staging_area,'s1')        
-        
-        # download the files and retunr them for datacube writing
-        self._download_s1_data(bb,self.start,self.end,download_key,s1_staging_dir)
-        new_s1_files = sorted(glob.glob(os.path.join(s1_staging_dir,'S1_GRD_*%s*tif'%download_key)))
-        
+            timestamp = dt.datetime.now().strftime('%Y%m%d%H%M%S')
+            download_key = f"{self.key}_{timestamp}"
+        else:
+            download_key = self.__gen_download_key()
+
+        # Set relative orbit if provided
+        orbit_no = rel_orbit
+        if rel_orbit:
+            self.rel_orbit = rel_orbit
+        else:
+            self.rel_orbit = None
+
+        # Define the staging directory for Sentinel-1 data
+        s1_staging_dir = os.path.join(staging_area, 's1')
+
+        # Download the data
+        self._download_s1_data(
+            bounding_box,
+            self.start,
+            self.end,
+            download_key,
+            s1_staging_dir,
+            orbit_no
+        )
+
+        # Collect and return new S1 file paths
+        search_pattern = os.path.join(s1_staging_dir, f'S1_GRD_*{download_key}*tif')
+        new_s1_files = sorted(glob.glob(search_pattern))
+
         return new_s1_files
+
         
     def download_raw_all(self, staging_area, manual_key = None): # staging_area set by user 
        
@@ -309,7 +329,7 @@ class SentinelDownloader():
         
         
     def _download_s1_data(self, in_boundary, download_start, download_end,
-                         key, download_directory):
+                         key, download_directory, orbit_no):
         
         # put the bounding box into a geojson which is what earth engine works with
         geoj = self.__gen_geojson(in_boundary['north'],
@@ -319,8 +339,6 @@ class SentinelDownloader():
 
         # create an earth engine object that will deliniate where to download
         geometry = ee.Geometry.Polygon(geoj['features'][0]['geometry']['coordinates'])
-        
-        
         
         # specifiy for earth engine which product we are downloading
         product_name = 'S1_GRD'
@@ -345,7 +363,7 @@ class SentinelDownloader():
                              filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')).
                              filterDate(start_date, end_date).
                              select(bands))
-
+            ee_collection = ee_collection.filterMetadata('relativeOrbitNumber_start', 'equals', orbit_no)
             # repository to put the tasks so they can be checked
             tasks = []
                

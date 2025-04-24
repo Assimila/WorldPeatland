@@ -96,7 +96,7 @@ def transform_save(orbit, saved_path):
     return output_sinu
 
 
-def group_tifs_by_date(site_fpath, orbit):
+def group_tifs_by_date(site_fpath, orbit, orbit_no):
     """
     Groups `.tif` files by their timestep (date) based on the provided directory and orbit.
 
@@ -112,7 +112,7 @@ def group_tifs_by_date(site_fpath, orbit):
 
     # Get a flattened list of all `.tif` file paths for the corresponding bands
     flat_list = list(chain.from_iterable(
-        sorted(glob.glob(f'{site_fpath}/%s/*/*.tif' % band)) for band in bands
+        sorted(glob.glob(f'{site_fpath}/%s/*/*{orbit_no}*.tif' % band)) for band in bands
     ))
 
     # Initialize a default dict to hold lists of file paths for each date
@@ -216,50 +216,41 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     LOG.info('Smoothened blocks successfully combined')
     return combined
 
-def main(site_fpath):
 
-    orbits = ['ASCENDING', 'DESCENDING']
+def main(site_fpath, orbit, orbit_no):
 
-    for orbit in orbits:
+    output_dir = create_dir(site_fpath, f'CrossRatio_{orbit}')
 
-        orbit_files = [file for file in os.listdir(site_fpath) if orbit in file]
-        if not orbit_files:
-            LOG.info(f"No files found with orbit '{orbit}' in {site_fpath}. Skipping to the next orbit.")
-            continue  # Skip to the next orbit if no files are found
+    grouped_tifs = group_tifs_by_date(site_fpath, orbit, orbit_no)
 
-        output_dir = create_dir(site_fpath, f'CrossRatio_{orbit}')
+    monthly_outputs = []
 
-        grouped_tifs = group_tifs_by_date(site_fpath, orbit)
+    for timestep, files in grouped_tifs.items():
 
-        monthly_outputs = []
+        # Create the dictionary from files to stack and concatenate the datasets in xarray format
+        files_dict = {}
+        for file in files:
+            if "VV" in file:
+                files_dict["VV"] = file
+            elif "VH" in file:
+                files_dict["VH"] = file
+            elif "angle" in file:
+                files_dict["angle"] = file
 
-        for timestep, files in grouped_tifs.items():
+        ds = create_xr(files_dict)
+        _ds = apply_threshold(ds)
 
-            # Create the dictionary from files to stack and concatenate the datasets in xarray format
-            files_dict = {}
-            for file in files:
-                if "VV" in file:
-                    files_dict["VV"] = file
-                elif "VH" in file:
-                    files_dict["VH"] = file
-                elif "angle" in file:
-                    files_dict["angle"] = file
+        LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
+        ds_cr = calc_cr(_ds)
+        LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
 
-            ds = create_xr(files_dict)
-            _ds = apply_threshold(ds)
+        # TODO think about if 2 zones for one site
+        # then will have to get the zone that is covering the largest area
+        proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
 
-            # TODO separate per angles??
-            LOG.info(f'calculating cross ratio for {timestep} - {orbit} orbit')
-            ds_cr = calc_cr(_ds)
-            LOG.info(f'{timestep} Cross ratio {orbit} successfully calculated')
-
-            # TODO think about if 2 zones for one site
-            # then will have to get the zone that is covering the largest area
-            proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
-
-            output_utm = output_dir + f'/cross_ratio_{orbit}_utm_{timestep}.tif'
-            monthly_outputs.append(output_utm)
-            save_xarray_old(output_utm, ds_cr, 'cr')
+        output_utm = output_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_{timestep}.tif'
+        monthly_outputs.append(output_utm)
+        save_xarray_old(output_utm, ds_cr, 'cr')
 
             # change projection from utm to sinusoidal
         #           output_sinu = transform_save(ds_cr, orbit, saved_path)
@@ -269,41 +260,54 @@ def main(site_fpath):
         #           arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
         #           ds = create_xarr(saved_opn, 'cr', arr, dts)
         # open all cross ratio tiffs and put in one xarray
-        stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
+    stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
 
-        LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
-        ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
+    LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
+    ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
 
-        # smoothn should happen on all the time series per orbit
-        # Chunk the dataset to enable Dask computation
-        LOG.info('Begin dask chunking')
-        dask_chunks = ds_all_years.chunk({"latitude": 5, "longitude": 5})
+    # smoothn should happen on all the time series per orbit
+    # Chunk the dataset to enable Dask computation
+    LOG.info('Begin dask chunking')
+    dask_chunks = ds_all_years.chunk({"latitude": 5, "longitude": 5})
 
-        LOG.info('Begin block smoothing')
-        output_blocks_dir = create_dir(output_dir, 'output_blocks')
-        smoothed_result = process_large_dask_chunks(
-            dask_dataset=dask_chunks,
-            block_size=100,  # Spatial block size
-            var_name="cr",  # Variable to smooth
-            window_size=3,  # Smoothing window size
-            flag=True,  # Smoothing flag
-            output_dir=output_blocks_dir
-        )
+    LOG.info('Begin block smoothing')
+    output_blocks_dir = create_dir(output_dir, 'output_blocks')
+    smoothed_result = process_large_dask_chunks(
+        dask_dataset=dask_chunks,
+        block_size=100,  # Spatial block size
+        var_name="cr",  # Variable to smooth
+        window_size=3,  # Smoothing window size
+        flag=True,  # Smoothing flag
+        output_dir=output_blocks_dir
+    )
 
-        smoothed_result.to_netcdf("smoothed_dataset.nc")
-        LOG.info('The dask chunks have been smoothened')
-        smoothed_result.attrs['crs'] = proj4_string
+    smoothed_result.to_netcdf("smoothed_dataset.nc")
+    LOG.info('The dask chunks have been smoothened')
+    smoothed_result.attrs['crs'] = proj4_string
 
-        output_ts_dir = create_dir(output_dir, 'timeSeries')
-        fname = output_ts_dir + f'/cross_ratio_{orbit}_utm_smoothn.tif'
-        save_xarray_old(fname, smoothed_result, f'cr')
-        LOG.info(f'Cross Ratio {orbit} Smoothened and saved here: {fname}')
+    output_ts_dir = create_dir(output_dir, 'timeSeries')
+    fname = output_ts_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_smoothn.tif'
+    save_xarray_old(fname, smoothed_result, f'cr')
+    LOG.info(f'Cross Ratio {orbit} {orbit_no} Smoothened and saved here: {fname}')
 
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
-        print("Usage: python script.py <site_fpath>")
+    if len(sys.argv) != 4:
+        print("Usage: python script.py <site_fpath_S1_GRD> <orbit> <orbit_no>")
+        print('Example: python s1_pre_processing /path/to/site/S1_GRD ASCENDING 58')
+
     else:
         site_directory = sys.argv[1]  # i.e. '/wp_data/sites/Degero/Sentinel/datacube/S1_GRD'
-        main(site_directory)
+        orbit = sys.argv[2].upper()
+        orbit_no = sys.argv[3]
+
+        if not orbit_no.isdigit():
+            print("Error: orbit_no must be a whole number like 58")
+            sys.exit(1)
+
+        orbit_no = int(orbit_no)  # Convert to integer after validation
+
+        if orbit not in ['ASCENDING', 'DESCENDING']:
+            print('Error: orbit direction must be <ASCENDING> or <DESCENDING>')
+        main(site_directory, orbit, orbit_no)

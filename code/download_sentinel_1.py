@@ -274,7 +274,7 @@ def generate_dates(start_date, end_date):
 def get_sentinel(site_area, site_directory, geojson_path, project):
     """ Download through GEE S1_GRD data only"""
 
-    rel_orbit = 164
+    rel_orbit = 29
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
 

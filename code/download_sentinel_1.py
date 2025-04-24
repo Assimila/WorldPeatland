@@ -17,7 +17,11 @@ from WorldPeatland.code.SentinelDownloader import SentinelDownloader
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
-'''downloader_wp first script to run: it will download all MODIS, sentinel and VIIRS data for the input geojson file'''
+"""
+downloader_s1 it will download sentinel 1 (S1-GRD) and VIIRS data for the input geojson file
+S1 for the years 2017 till 2024 
+VIIRS from 2021 onwards
+"""
 
 
 def get_polygon(geojson_path):
@@ -267,35 +271,18 @@ def generate_dates(start_date, end_date):
             month += 1
 
 
-def check_dates(start_date, end_date, sentinel_start_date):
-    # for s1 downloaders
-    if start_date and end_date < sentinel_start_date:
-        LOG.info(f'No Sentinel 1 data available between these dates {start_date} and {end_date}')
-        start_date = 0
-        end_date = 0
-    elif start_date < sentinel_start_date and end_date > sentinel_start_date:
-        # set the _start_date to be equal to the sentinel data availability
-        LOG.info(f'Sentinel data is only available after {sentinel_start_date}')
-        start_date = sentinel_start_date
-    return start_date, end_date
-
-
-def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, project):
+def get_sentinel(site_area, site_directory, geojson_path, project):
     """ Download through GEE S1_GRD data only"""
 
-    rel_orbit = 58
+    rel_orbit = 164
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
 
     # get the list of dates already downloaded
     dt_l = sentinel_file_checker(path_sentinel, site_area)
 
-    s2_start_date = datetime.strptime('2017-03-28', '%Y-%m-%d')
-    start_date, end_date = check_dates(start_date, end_date, s2_start_date)
-
-    if start_date == 0:
-        LOG.error(f'Please input dates more than {s2_start_date} to obtain sentinel data')
-        return
+    start_date = datetime(2017, 1, 1, 0, 0)
+    end_date = datetime(2024, 12, 31, 0, 0)
     if dt_l:
 
         # if dt_l is not empty and data is already downloaded then
@@ -328,7 +315,7 @@ def get_sentinel(start_date, end_date, site_area, site_directory, geojson_path, 
     else:
         LOG.info(f'Starting to download Sentinel data for {site_area}')
         # Let's loop over each year by itself
-        start_date = datetime(2019, 1, 1, 0, 0)
+
         for year in range(start_date.year, end_date.year + 1):
             if year == start_date.year:
                 start = start_date  # The first interval starts from the start_date
@@ -442,7 +429,7 @@ def main(geojson_path, output_dir):
     # https://developers.google.com/earth-engine/datasets/catalog/sentinel
 
     LOG.info(f'MODIS data download completed for {site_area}')
-    get_sentinel(_start_date, _end_date, site_area, site_directory, geojson_path, project='worldpeatland')
+    get_sentinel(site_area, site_directory, geojson_path, project='worldpeatland')
 
     get_viirs_archive(start_date, country, site_area, site_directory)
 

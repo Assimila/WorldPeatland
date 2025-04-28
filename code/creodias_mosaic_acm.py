@@ -489,36 +489,32 @@ def main(OUTPUT_DIR, geojson_fname):
 
     url_start = "https://datahub.creodias.eu/odata/v1/Products?$filter="
 
-    url_end = (f"(Online eq true) and "
+    url_end = (
+               f"(Online%20eq%20true)%20and%20"
                f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
                f"{polygon}"
-               f"))%27)) and "
-               f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20(((Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27A%27))%20or%20("
+               f"))%27))%20and%20"
+               f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20((("
+               f"Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20"
+               f"i0/Value%20eq%20%27S2MSI1C%27))))%20and%20((("
                f"Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27B%27))))%20and%20((("
-               f"Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI1C%27))))%20and%20((("
-               f"Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.00%27))%20or%20("
-               f"Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20 eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27)))))))))&$expand"
-               f"=Attributes"
-               f"&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20")
+               f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.00%27"
+               f"))%20or%20(Attributes/OData.CSC.StringAttribute/any("
+               f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27"
+               f")))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+    )
 
     # url_2 not selecting collection 1 only
     url_end_2 = (
-        f"(Online eq true) and "
+        f"(Online%20eq%20true)%20and%20"
         f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
         f"{polygon}"
-        f"))%27)) and "
-        f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20(((Attributes/OData.CSC.StringAttribute/any("
-        f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27A%27))%20or%20("
-        f"Attributes/OData.CSC.StringAttribute/any("
-        f"i0:i0/Name%20eq%20%27platformSerialIdentifier%27%20and%20i0/Value%20eq%20%27B%27))))%20and%20((("
-        f"Attributes/OData.CSC.StringAttribute/any("
-        f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI1C%27)))))))))&$expand=Attributes"
-        f"&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+        f"))%27))%20and%20"
+        f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20"
+        f"(((Attributes/OData.CSC.StringAttribute/any("
+        f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI1C%27)))))))))"
+        f"&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+
     )
 
     # Get a list of all the sensing dates pickle files downloaded for the SR L2A data product
@@ -539,9 +535,13 @@ def main(OUTPUT_DIR, geojson_fname):
         end_day = monthrange(year, month)[1]
         end_date = f'{year}-{month:02}-{end_day:02}T23:59:59.999Z'
 
-        url = (f"{url_start}"
-               f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
-               f"{url_end}")
+        url = (
+            f"{url_start}"
+            f"((ContentDate/Start%20ge%20"
+            f"{start_date}"
+            f"%20and%20ContentDate/Start%20le%20{end_date})%20and%20"
+            f"{url_end}"
+        )
 
         # Encode URL
         url_encoded = requote_uri(url)
@@ -594,9 +594,13 @@ def main(OUTPUT_DIR, geojson_fname):
             LOG.info(f'No images found under collection 1 for the {month}-{year}')
             LOG.info(f'Checking other MSL1AC collections')
             # create url without asking for collection 1
-            url = (f"{url_start}"
-                   f"((ContentDate/Start ge {start_date} and ContentDate/Start le {end_date}) and "
-                   f"{url_end_2}")
+            url = (
+                f"{url_start}"
+                f"((ContentDate/Start%20ge%20"
+                f"{start_date}"
+                f"%20and%20ContentDate/Start%20le%20{end_date})%20and%20"
+                f"{url_end_2}"
+            )
 
             # Encode URL
             url_encoded = requote_uri(url)
@@ -631,7 +635,7 @@ def main(OUTPUT_DIR, geojson_fname):
                 # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR
                 # L2A
                 if sensing_date in sensing_dates_list:
-
+                    LOG.info(f'Image found for sensing date {sensing_date}')
                     S3Paths.append(element[i]['S3Path'])
 
                     new_dir = os.path.join(OUTPUTDIR, image_name)
@@ -666,7 +670,7 @@ if __name__ == "__main__":
         print("Usage: python script.py <OUTPUT_DIR>, <geojson_fname>")  # the user has to input two arguments
     else:
         # location of the second item in the list which is the first argument geojson site location
-        OUTPUT_DIR = sys.argv[2]
+        OUTPUT_DIR = sys.argv[1]
         geojson_fname = sys.argv[2]
         main(OUTPUT_DIR, geojson_fname)
 

@@ -20,6 +20,7 @@ import logging
 from WorldPeatland.code.gdal_sheep import reproject_image, create_xarr
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 from WorldPeatland.code.utils import create_dir
+from WorldPeatland.code.creodias_boa_retrieval import filter_latest_processing, get_endingDateTime
 
 sys.path.append('/workspace/TATSSI')
 logging.basicConfig(level=logging.INFO)
@@ -489,23 +490,23 @@ def main(OUTPUT_DIR, geojson_fname):
 
     url_start = "https://datahub.creodias.eu/odata/v1/Products?$filter="
 
-    url_end = (
-               f"(Online%20eq%20true)%20and%20"
-               f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
-               f"{polygon}"
-               f"))%27))%20and%20"
-               f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20((("
-               f"Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20"
-               f"i0/Value%20eq%20%27S2MSI1C%27))))%20and%20((("
-               f"Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.00%27"
-               f"))%20or%20(Attributes/OData.CSC.StringAttribute/any("
-               f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27"
-               f")))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
-    )
+    # url_end = (
+    #            f"(Online%20eq%20true)%20and%20"
+    #            f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
+    #            f"{polygon}"
+    #            f"))%27))%20and%20"
+    #            f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20((("
+    #            f"Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20"
+    #            f"i0/Value%20eq%20%27S2MSI1C%27))))%20and%20((("
+    #            f"Attributes/OData.CSC.StringAttribute/any("
+    #            f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.00%27"
+    #            f"))%20or%20(Attributes/OData.CSC.StringAttribute/any("
+    #            f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27"
+    #            f")))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
+    # )
 
-    # url_2 not selecting collection 1 only
-    url_end_2 = (
+    # url not selecting collection 1 only
+    url_end= (
         f"(Online%20eq%20true)%20and%20"
         f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
         f"{polygon}"
@@ -549,13 +550,17 @@ def main(OUTPUT_DIR, geojson_fname):
         # Remove unnecessary characters from encoded URL
         url_encoded_cleared = url_encoded.replace('%0A', '')
 
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"}
+
         # Initialize the S3Paths list
         element = []
 
         # Start fetching pages
         while url_encoded_cleared:
             # Get the response
-            response = requests.get(url_encoded_cleared)
+            response = requests.get(url_encoded_cleared, headers=headers)
             response_data = response.json()
 
             # Extract the S3Paths from the current page, assuming they are in a field called "value"
@@ -564,18 +569,15 @@ def main(OUTPUT_DIR, geojson_fname):
             # Check for the next page using @odata.nextLink
             url_encoded_cleared = response_data.get("@odata.nextLink")
 
+        element = filter_latest_processing(element)
         S3Paths = []
         for i in range(len(element)):
 
-            # Get acquisition date first date in the S3Path file name
-            sensing_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
-            sensing_date = datetime.strptime(sensing_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
-
             image_name = element[i]['Name']
+            # Get acquisition date first date in the S3Path file name
+            acquisition_date = get_endingDateTime(element[i])  # dtype: str
 
-            # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR
-            # L2A
-            if sensing_date in sensing_dates_list:
+            if acquisition_date in sensing_dates_list:
 
                 S3Paths.append(element[i]['S3Path'])
 
@@ -587,65 +589,7 @@ def main(OUTPUT_DIR, geojson_fname):
                     LOG.info(f"{element[i]['S3Path']} already exists")
             else:
                 continue
-        # since this is based on the pickle files, if a pickle file is there meaning SR data is available
-        # check if S3Paths are empty meaning the TOA image is not available in collection 1 N0500
-        # thus, the need to get an image from any other previous collection with the same date.
-        if not S3Paths:
-            LOG.info(f'No images found under collection 1 for the {month}-{year}')
-            LOG.info(f'Checking other MSL1AC collections')
-            # create url without asking for collection 1
-            url = (
-                f"{url_start}"
-                f"((ContentDate/Start%20ge%20"
-                f"{start_date}"
-                f"%20and%20ContentDate/Start%20le%20{end_date})%20and%20"
-                f"{url_end_2}"
-            )
 
-            # Encode URL
-            url_encoded = requote_uri(url)
-
-            # Remove unnecessary characters from encoded URL
-            url_encoded_cleared = url_encoded.replace('%0A', '')
-
-            # Initialize the S3Paths list
-            element = []
-
-            # Start fetching pages
-            while url_encoded_cleared:
-                # Get the response
-                response = requests.get(url_encoded_cleared)
-                response_data = response.json()
-
-                # Extract the S3Paths from the current page, assuming they are in a field called "value"
-                element.extend(response_data.get("value", []))
-
-                # Check for the next page using @odata.nextLink
-                url_encoded_cleared = response_data.get("@odata.nextLink")
-
-            S3Paths = []
-            for i in range(len(element)):
-
-                # Get acquisition date first date in the S3Path file name
-                end_date = element[i]['ContentDate']['End'].split('.')[0]  # dtype: str
-                sensing_date = datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%S').strftime('%Y%m%dT%H%M%S')
-
-                image_name = element[i]['Name']
-
-                # Check if the sensing date obtained from the current S3Path is in the sensing_date_list obtained from SR
-                # L2A
-                if sensing_date in sensing_dates_list:
-                    LOG.info(f'Image found for sensing date {sensing_date}')
-                    S3Paths.append(element[i]['S3Path'])
-
-                    new_dir = os.path.join(OUTPUTDIR, image_name)
-                    try:
-                        os.symlink(element[i]['S3Path'], new_dir, target_is_directory=True)
-
-                    except FileExistsError:
-                        LOG.info(f"{element[i]['S3Path']} already exists")
-                else:
-                    continue
 
         # Create daily VRTs
         outputs = create_daily_vrts(S3Paths, OUTPUTDIR, datasets, year, month, end_day, extent)

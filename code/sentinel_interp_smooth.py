@@ -7,22 +7,31 @@ from dask.diagnostics import ProgressBar
 from WorldPeatland.code.utils import create_dir, proj4_extract
 from WorldPeatland.code.gdal_sheep import gdal_stack_dt, create_xarr
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-from WorldPeatland.code.smoothn import smoothn
 from WorldPeatland.code.s1_pre_processing import process_and_save_block
-
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 
-def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, flag, output_dir):
+def interpolate_and_save_block(block, save_path):
+    """
+    interpolate a single block and save it to disk.
+    """
+    interpolated_result = block.interpolate_na(dim='time', method='linear')
+    interpolated_result.to_netcdf(save_path)
+    LOG.info(f'{save_path} successfully saved')
+
+
+def process_large_dask_chunks(dask_dataset, block_size, var_name , flag, output_dir):
     """
     Process a large Dask dataset by splitting it into smaller spatial blocks, smoothing each block,
     saving the results, and then recombining them.
     """
     latitude_chunks = range(0, dask_dataset.latitude.size, block_size)
     longitude_chunks = range(0, dask_dataset.longitude.size, block_size)
-    smoothed_blocks = []
+
+    # store paths to all blocks after smoothn1 + linear + smoothn2
+    processed_blocks = []
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -34,20 +43,36 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
 
                 block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
                                           longitude=slice(lon_start, lon_end))
-                block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.nc"
-                process_and_save_block(block, block_path, var_name, window_size, flag)
-                logging.info(f'{block_path} successfully saved')
-                smoothed_blocks.append(block_path)
+
+                # 1st smoother
+                window_size = 3
+                block_path_s1 = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.smoothn{window_size}.nc"
+                process_and_save_block(block, block_path_s1, var_name, window_size, flag)
+                logging.info(f'{block_path_s1} successfully saved')
+
+
+                # interpolation
+                block_path_s1_linear = block_path_s1.replace('.nc', '.linear.nc')
+                interpolate_and_save_block(block, block_path_s1_linear)
+
+
+                # 3rd smoother
+                window_size = 30
+                block_path_s1_linear_s2 = block_path_s1_linear.replace('.nc', f'.smoothn{window_size}.nc')
+                process_and_save_block(block, block_path_s1_linear_s2, var_name, window_size, flag)
+
+                processed_blocks.append(block_path_s1_linear_s2)
+
 
     logging.info('Opening all smoothed blocks in one xarray')
-    smoothed_datasets = xr.open_mfdataset(smoothed_blocks, chunks={"latitude": 256, "longitude": 256})
+    processed_datasets = xr.open_mfdataset(processed_blocks, chunks={"latitude": 256, "longitude": 256})
 
     # Clean up temporary output blocks
     # for block_path in smoothed_blocks:
     #     os.remove(block_path)
     # os.rmdir(output_dir)
     # logging.info('Smoothed blocks successfully combined and temporary files deleted')
-    return smoothed_datasets
+    return processed_datasets
 
 
 def main(site_dir):
@@ -56,88 +81,55 @@ def main(site_dir):
     mleonn_path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN', '*')
     paths = glob(mleonn_path)
 
+
     if not paths:  # If paths list is empty
         raise FileNotFoundError(f"No MLEONN data products folders found in the specified directory path {mleonn_path}.")
 
     # Loop over the different MLEONN data products i.e. LAI, cab ...
     for p in paths:
-        # TODO remove this line later
         p = '/wp_data/sites/Degero/Sentinel/MSIL2A/datacube/MLEONN/lai'
         var_name = os.path.basename(p)
         LOG.info(f'Starting interpolation for {var_name}')
 
         # get the tif files to interpolate
         tif_files = sorted(glob(os.path.join(p, "*.tif")))
-        #TODO remove this line later
-        tif_files = tif_files[:5]
         # Load and stack the files
         stacked_arr, dts, saved_opn = gdal_stack_dt(tif_files)
         data_with_nan = create_xarr(saved_opn, var_name, stacked_arr, dts)
         # create directory to interpol
-        interp_dir = create_dir(p, 'interpolated')
+        interp_dir = create_dir(p, 'interpolated_test')
         proj4_string = proj4_extract(saved_opn)
 
-        # 1. smoothn with a small window
-        s = 3
-        LOG.info(f'Starting first smoother with smoothing factor {s} for {var_name}')
+        LOG.info('Dask chucking began')
         dask_chunks = data_with_nan.chunk({"latitude": 5, "longitude": 5})
 
-        LOG.info('Begin block smoothing')
-        output_blocks_dir = create_dir(interp_dir, 'output_blocks_smooth1')
-        smoothed_result = process_large_dask_chunks(
+        LOG.info('Begin block processing]')
+        output_blocks_dir = create_dir(interp_dir, 'dask_processing_outputs')
+        processed_result = process_large_dask_chunks(
             dask_dataset=dask_chunks,
             block_size=100,  # Spatial block size
             var_name=var_name,  # Variable to smooth
-            window_size=s,  # Smoothing window size
             flag=True,  # Smoothing flag
             output_dir=output_blocks_dir,
         )
 
-        LOG.info('The dask chunks have been smoothened')
+        LOG.info('The dask chunks have been processed')
 
-        fname = f'{var_name}.smoothn.{s}.tif'
+        fname = f'{var_name}.smoothn3.linear.smoothn30.tif'
         output_dir = os.path.join(interp_dir, fname)
+
+        # TODO remove tests
+        # smoothed_result = rioxarray.open_rasterio(output_dir)
+        # data = smoothed_result.values
+        # smoothed_result = smoothed_result.rename({'x': 'lon', 'y': 'lat', 'band': 'time'})
+        # smoothed_result = smoothed_result.assign_coords({
+        #     'time': dts,  # Replace band indices with datetime values
+        # })
+
         # set extract and set proj 4 to xarray
-        smoothed_result.attrs['crs'] = proj4_string
-        save_xarray_old(output_dir, smoothed_result, var_name)
-
-        LOG.info(f"First Smoothn  with smoothing factor of {s} successfully saved here {output_dir}")
-
-        # 2. Interpolate missing values
-        data_interpolated = smoothed_result.interpolate_na(dim='time', method='linear')
-        fname = f'{var_name}.smoothn.{s}.linear.tif'
-        output_dir = os.path.join(interp_dir, fname)
-        # set proj 4 to xarray
-        data_interpolated.attrs['crs'] = proj4_string
-        save_xarray_old(output_dir, data_interpolated, var_name)
-
-        # 3. apply smoothn on the interpolated data
-        s = 30
-        LOG.info(f'Starting smoothn 2 with {s}for {var_name}')
-
-        LOG.info(f'Starting first smoother with smoothing factor {s} for {var_name}')
-        dask_chunks = data_interpolated.chunk({"latitude": 5, "longitude": 5})
-
-        LOG.info('Begin block smoothing')
-        smoothed_result = process_large_dask_chunks(
-            dask_dataset=dask_chunks,
-            block_size=100,  # Spatial block size
-            var_name=var_name,  # Variable to smooth
-            window_size=s,  # Smoothing window size
-            flag=True,  # Smoothing flag
-            output_dir=output_blocks_dir,
-        )
-
-        LOG.info('The dask chunks have been smoothened')
-
-        fname = f'{var_name}.linear.smoothn.0.5.tif'
-        output_dir = os.path.join(interp_dir, fname)
-        # set extract and set proj 4 to xarray
-        smoothed_result.attrs['crs'] = proj4_string
-        save_xarray_old(output_dir, smoothed_result, var_name)
-
-        LOG.info(f'Smoothn 2 successfully saved here {output_dir}')
-
+        processed_result.attrs['crs'] = proj4_string
+        save_xarray_old(output_dir, processed_result, var_name)
+        LOG.info('Script process Done!')
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

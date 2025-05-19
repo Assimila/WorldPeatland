@@ -490,23 +490,8 @@ def main(OUTPUT_DIR, geojson_fname):
 
     url_start = "https://datahub.creodias.eu/odata/v1/Products?$filter="
 
-    # url_end = (
-    #            f"(Online%20eq%20true)%20and%20"
-    #            f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
-    #            f"{polygon}"
-    #            f"))%27))%20and%20"
-    #            f"(((((Collection/Name%20eq%20%27SENTINEL-2%27)%20and%20((("
-    #            f"Attributes/OData.CSC.StringAttribute/any(i0:i0/Name%20eq%20%27productType%27%20and%20"
-    #            f"i0/Value%20eq%20%27S2MSI1C%27))))%20and%20((("
-    #            f"Attributes/OData.CSC.StringAttribute/any("
-    #            f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.00%27"
-    #            f"))%20or%20(Attributes/OData.CSC.StringAttribute/any("
-    #            f"i0:i0/Name%20eq%20%27processorVersion%27%20and%20i0/Value%20eq%20%2705.09%27"
-    #            f")))))))))&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
-    # )
-
     # url not selecting collection 1 only
-    url_end= (
+    url_end = (
         f"(Online%20eq%20true)%20and%20"
         f"(OData.CSC.Intersects(Footprint=geography%27SRID=4326;POLYGON%20(("
         f"{polygon}"
@@ -515,7 +500,6 @@ def main(OUTPUT_DIR, geojson_fname):
         f"(((Attributes/OData.CSC.StringAttribute/any("
         f"i0:i0/Name%20eq%20%27productType%27%20and%20i0/Value%20eq%20%27S2MSI1C%27)))))))))"
         f"&$expand=Attributes&$expand=Assets&$orderby=ContentDate/Start%20asc&$top=20"
-
     )
 
     # Get a list of all the sensing dates pickle files downloaded for the SR L2A data product

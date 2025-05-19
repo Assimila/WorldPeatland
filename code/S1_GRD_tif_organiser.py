@@ -3,8 +3,32 @@ import re
 from collections import defaultdict
 from osgeo import gdal
 
+"""
+**Script Description:**
+
+This script is designed to reorganize and merge Sentinel-1 S1\_GRD monthly `.tif` files that have been downloaded from 
+Google Earth Engine (GEE) in multiple chunks due to large areas of interest (AOIs).
+
+**Pre-processing Step (Manual):**
+Before running the script, manually consolidate the `.tif` files into three main directories:
+
+* `VV_ASCENDING`
+* `VH_ASCENDING`
+* `angle_ASCENDING`
+  (Repeat for DESCENDING if applicable: `VV_DESCENDING`, `VH_DESCENDING`, `angle_DESCENDING`)
+
+GEE typically splits large AOIs into smaller tiles, creating separate `VV`, `VH`, and `angle` folders for each region.
+ Move all `.tif` files of the same type (e.g., all VV) into their respective single folders.
+
+**Script Functionality:**
+The script merges `.tif` files corresponding to different regions but from the same month and year into a single `.tif` 
+file, preserving important metadata such as timestamp, coordinate reference system (CRS), and other geospatial 
+attributes.
+
+"""
+
 # Parent directory containing the subfolders
-parent_folder = "/wp_data/sites/HatfieldThorne/Sentinel/datacube/S1_GRD"
+parent_folder = "/wp_data/sites/CentralKalimantan/Sentinel/datacube/S1_GRD"
 
 # Regex pattern to extract the year-month from filenames
 date_pattern = re.compile(r"_(\d{4}-\d{2})\.")  # Match pattern for year-month in filenames

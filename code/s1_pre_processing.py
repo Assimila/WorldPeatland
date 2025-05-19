@@ -1,13 +1,19 @@
-from WorldPeatland.code.save_xarray_to_gtiff_old import *
-from WorldPeatland.code.gdal_sheep import *
-from WorldPeatland.code.MLEO_NN import *
-from WorldPeatland.code.utils import *
+
 from smoothn import smoothn
 from dask.diagnostics import ProgressBar
 from itertools import chain
 from collections import defaultdict
+import os
+from glob import glob
+from osgeo import gdal
+import xarray as xr
+import numpy as np
 import logging
 import sys
+
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
+from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, get_proj4_from_tif, gdal_stack_dt
+from WorldPeatland.code.utils import get_timestep_from_tif, create_dir
 
 sys.path.insert(0, '/workspace/WorldPeatland/code/')
 
@@ -179,6 +185,7 @@ def process_and_save_block(block, save_path, var_name, window_size, flag):
     """
     smoothed_block = DW_smoothn_smooth_xarray(block, var_name, window_size, flag)
     smoothed_block.to_netcdf(save_path)
+    LOG.info(f'{save_path} successfully saved')
 
 
 def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, flag, output_dir):

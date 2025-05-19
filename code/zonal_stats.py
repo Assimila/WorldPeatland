@@ -99,7 +99,7 @@ def main(site_directory, shapefile_path):
         df.set_index('Dates', inplace=True)
 
         # create pkl_filename from tif_filename
-        pkl_filename = tif_filename.replace('.tif', '').replace('.', '_') + '.zonalStats.pkl'
+        pkl_filename = tif_filename.replace('.tif', '') + '.zonalStats.pkl'
 
         # save the raw zonal stat in a pickle file
         output_path = create_dir(modis_timeSeries_path, 'ZonalStats')

@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("Usage: python script.py <ts_path>")
+        print("Usage: python script.py <ts_path> /site_name/MODIS/timeSeries <output_dir> (you have to create the dir)")
     else:
         # provide the path to the time_series created from MODIS data
         ts_path = sys.argv[1]

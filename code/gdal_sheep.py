@@ -1,3 +1,4 @@
+import os
 from osgeo import gdal, osr
 from osgeo import gdal_array
 import numpy as np
@@ -224,7 +225,8 @@ def gdal_stack_dt(lt):
         saved_opn = opn
 
         # open the array
-        arr = opn.ReadAsArray()
+        arr = opn.ReadAsArray() #xoff=0, yoff = 0, xsize=100, ysize=100) # add these arguments to take only a chunk of
+                                                                        # the dataset spatially
 
         # check the dimensions of the array because cannot concatenate
         # arrays with different dimensions they all should be 3d np.arrays

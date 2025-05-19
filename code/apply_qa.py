@@ -68,6 +68,7 @@ def main(site_directory, qa_path):
                     LOG.info(f'Corresponding snow path used {snow_path}')
                 else:
                     LOG.error(f'No corresponding snow BRDF albedo was found for {timestep}')
+                    continue
 
                 # Open albedo raster in update mode
                 albedo_dataset = gdal.Open(albedo_path, gdal.GA_Update)

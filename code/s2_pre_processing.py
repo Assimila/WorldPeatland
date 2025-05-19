@@ -1,5 +1,5 @@
 import os.path
-import glob
+from glob import glob
 from datetime import datetime as dt
 import rasterio
 import sys
@@ -104,7 +104,7 @@ def prepare_run_MLEONN(bd, opn, month_tif, reflectance_tifs):
 
     # Empty the input_dict
     input_dict = None
-    LOG.info(f'MLEONN four products successfully formed')
+    LOG.info(f'MLEONN four products successfully formed for {time}')
 
     return lai, fapar, fc, cab, time
 
@@ -201,7 +201,7 @@ def main(site_dir):
     # Path to B02 datacube tiff files
     pattern = os.path.join(s2_path, 'B02', '*.tif')
     # get B02 monthly tif files
-    B02_tif_files_list = glob.glob(pattern)
+    B02_tif_files_list = glob(pattern)
 
     # Set reflectance bands list
     bands = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B11', 'B12']
@@ -214,7 +214,7 @@ def main(site_dir):
         reflectance_tifs = []
         for band in bands:
             pattern = os.path.join(s2_path, band, f'*{timestep}*.tif')
-            reflectance_tifs.extend(glob.glob(pattern, recursive=True))
+            reflectance_tifs.extend(glob(pattern, recursive=True))
 
         # Open the monthly B02 tif file
         opn = gdal.Open(month_tif)
@@ -261,8 +261,8 @@ def main(site_dir):
         maxDis = 500
 
         # Reproject SCL layer once per timestep
-        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'SCL', f'*{timestep}.tif')
-        fname = glob.glob(pattern)[0]
+        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'SCL', f'*{timestep}.tif')
+        fname = glob(pattern)[0]
         # Resample the SCL band (downscaling the SCL band pixel originally 60m to 20m)
         SCL_gdalobj = reproject_image(fname, month_tif)
         SCL_resampled = SCL_gdalobj.ReadAsArray()  # array dtype=uint8
@@ -272,8 +272,8 @@ def main(site_dir):
         if water_pixels.ndim == 2:
             water_pixels = water_pixels[np.newaxis, :]
 
-        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'B08', f'*{timestep}.tif')
-        fname = glob.glob(pattern)[0]
+        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'B08', f'*{timestep}.tif')
+        fname = glob(pattern)[0]
 
         b8_arr, dts, saved_opn = gdal_dt(fname)
         # Check if arr is 2D make it 3D to fit the time dimension
@@ -282,8 +282,8 @@ def main(site_dir):
 
         b8_arr = b8_arr / 10000.0  # apply scaling factor
 
-        pattern = os.path.join(site_dir, 'MSIL1C', 'datacube', 'S2_TOA', 'cprob', f'*{timestep}.tif')
-        fname = glob.glob(pattern)[0]
+        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL1C', 'datacube', 'S2_TOA', 'cprob', f'*{timestep}.tif')
+        fname = glob(pattern)[0]
         cloud_probability, dts, saved_opn = gdal_dt(fname)
         # Check if arr is 2D make it 3D to fit the time dimension
         if cloud_probability.ndim == 2:
@@ -293,8 +293,8 @@ def main(site_dir):
         dark_pixels = (b8_arr < NIR_DRK_THRESH).astype(bool)
 
         # get angular information from B2 in band metadata
-        pattern = os.path.join(site_dir, 'MSIL2A', 'datacube', 'S2_SR', 'B02', f'*{timestep}.tif')
-        fname = glob.glob(pattern)[0]
+        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'B02', f'*{timestep}.tif')
+        fname = glob(pattern)[0]
 
         dataset = gdal.Open(fname)
         band = dataset.GetRasterBand(bd)
@@ -317,7 +317,7 @@ def main(site_dir):
         }
 
         proj4_string = get_proj4_from_tif(month_tif)
-        path = os.path.join(site_dir, 'MSIL2A', 'datacube', 'MLEONN')
+        path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN')
         for varname, var_arr in variables.items():
             LOG.info(f"Processing {varname}...")
             create(var_arr, cloud_mask, dts, opn, varname, proj4_string, path, timestep)

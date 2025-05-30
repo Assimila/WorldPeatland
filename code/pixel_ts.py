@@ -83,7 +83,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     ds_output.attrs['_FillValue'] = _FillValue
 
     # save the xarray into a tif file 
-    save_xarray_old(output_fname, ds_output, _data_var)
+    save_xarray_old(output_fname, ds_output, _data_var, saved_opn.GetGeoTransform())
     # return the path of the new saved tif to perform zonal statistics on tif already multiplied by 
     # scaling factor and detrended 
     

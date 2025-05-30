@@ -65,12 +65,13 @@ def get_resolution_from_xarray(xarray):
 
     return (x_res, y_res)
   
-def save_xarray_old(fname, xarray, data_var):
+def save_xarray_old(fname, xarray, data_var, gt=None):
     """
     Saves an xarray dataset to a Cloud Optimized GeoTIFF (COG)
     :param fname: Full path of file where to save the data
     :param xarray: xarray Dataset
     :param data_var: Data variable in the xarray dataset
+    :param gt: Optional GeoTransform array
     """
 
     # Create GeoTransform - perhaps the user requested a
@@ -88,14 +89,18 @@ def save_xarray_old(fname, xarray, data_var):
     # Create tmp xarray DataArray
     
 #     _xarray = getattr(xarray, data_var)
+
     _xarray = xarray[data_var]
 
-    x_res, y_res = get_resolution_from_xarray(_xarray)
+    if gt == None:
 
-    gt = (_xarray.longitude.data[0] - (x_res / 2.),
-          x_res, 0.0,
-          _xarray.latitude.data[0] - (y_res / 2.),
-          0.0, y_res)
+        x_res, y_res = get_resolution_from_xarray(_xarray)
+
+        gt = (_xarray.longitude.data[0] - (x_res / 2.),
+              x_res, 0.0,
+              _xarray.latitude.data[0] - (y_res / 2.),
+              0.0, y_res)
+
 
     # Coordinate Reference System (CRS) in a PROJ4 string to a
     # Spatial Reference System Well known Text (WKT)

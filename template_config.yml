@@ -32,7 +32,7 @@
     qa_def: ['FparLai_QC', 'FparLai_QC']
     data_var: ['_Lai_500m', '_Fpar_500m']
     smooth_method: 'smoothn'
-    smooth_factor: '0.5'
+    smooth_factor: '1.5'
     period: '92'
   - name: Albedo
     product: MCD43A3.061

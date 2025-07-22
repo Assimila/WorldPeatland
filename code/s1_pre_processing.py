@@ -1,5 +1,4 @@
 
-from smoothn import smoothn
 from dask.diagnostics import ProgressBar
 from itertools import chain
 from collections import defaultdict
@@ -11,8 +10,9 @@ import numpy as np
 import logging
 import sys
 
+from WorldPeatland.code.smoothn import smoothn
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, create_xarr, get_proj4_from_tif, gdal_stack_dt
+from WorldPeatland.code.gdal_sheep import gdal_dt, create_coord_list, concat_xr, get_proj4_from_tif, _get_FillValue
 from WorldPeatland.code.utils import get_timestep_from_tif, create_dir
 
 sys.path.insert(0, '/workspace/WorldPeatland/code/')
@@ -49,6 +49,11 @@ def create_xr(fdict):
                 'latitude': ys,
                 'longitude': xs}
     )
+
+    # get fill value
+    _FillValue = _get_FillValue(opn)
+    # Add FillValue to attributes
+    ds.attrs['_FillValue'] = _FillValue
 
     return ds
 
@@ -118,7 +123,7 @@ def group_tifs_by_date(site_fpath, orbit, orbit_no):
 
     # Get a flattened list of all `.tif` file paths for the corresponding bands
     flat_list = list(chain.from_iterable(
-        sorted(glob.glob(f'{site_fpath}/%s/*/*{orbit_no}*.tif' % band)) for band in bands
+        sorted(glob(f'{site_fpath}/%s/*/*{orbit_no}*.tif' % band)) for band in bands
     ))
 
     # Initialize a default dict to hold lists of file paths for each date
@@ -224,7 +229,7 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     return combined
 
 
-def main(site_fpath, orbit, orbit_no):
+def main(site_fpath, orbit, orbit_no, period):
 
     output_dir = create_dir(site_fpath, f'CrossRatio_{orbit}')
 
@@ -259,23 +264,14 @@ def main(site_fpath, orbit, orbit_no):
         monthly_outputs.append(output_utm)
         save_xarray_old(output_utm, ds_cr, 'cr')
 
-            # change projection from utm to sinusoidal
-        #           output_sinu = transform_save(ds_cr, orbit, saved_path)
-        #           LOG.info(f'Cross Ratio for {orbit} has been saved here {saved_path}')
-
-        #           # Create an xarray to be able to perform smoothn
-        #           arr, dts, saved_opn = gdal_dt(output_sinu, 'time')
-        #           ds = create_xarr(saved_opn, 'cr', arr, dts)
-        # open all cross ratio tiffs and put in one xarray
-    stacked_arr, dts, saved_opn = gdal_stack_dt(monthly_outputs)
-
     LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
-    ds_all_years = create_xarr(saved_opn, 'cr', stacked_arr, dts)
+    ds_all_years = concat_xr(monthly_outputs, 'cr')
 
     # smoothn should happen on all the time series per orbit
     # Chunk the dataset to enable Dask computation
     LOG.info('Begin dask chunking')
-    dask_chunks = ds_all_years.chunk({"latitude": 5, "longitude": 5})
+    # -1: no chunking along this dimension
+    dask_chunks = ds_all_years.chunk({"latitude": 10, "longitude": 10, 'time': -1})
 
     LOG.info('Begin block smoothing')
     output_blocks_dir = create_dir(output_dir, 'output_blocks')
@@ -292,22 +288,35 @@ def main(site_fpath, orbit, orbit_no):
     LOG.info('The dask chunks have been smoothened')
     smoothed_result.attrs['crs'] = proj4_string
 
+    # Ensure dtype is float 32
+    smoothed_result = smoothed_result.astype('float32')
+
     output_ts_dir = create_dir(output_dir, 'timeSeries')
     fname = output_ts_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_smoothn.tif'
-    save_xarray_old(fname, smoothed_result, f'cr')
+    # save_xarray_old(fname, smoothed_result, f'cr')
     LOG.info(f'Cross Ratio {orbit} {orbit_no} Smoothened and saved here: {fname}')
 
+    # Detrend with a period of 45, check how many observations do we have per year
+    LOG.info(f'Detrend cross ratio')
+    trend_ds = smoothed_result['cr'].rolling(time=int(period), min_periods=1, center=True).mean()
+    ds_cr_dtr = trend_ds.to_dataset(name='cr')
+    ds_cr_dtr = ds_cr_dtr.astype('float32')
+    ds_cr_dtr.attrs['crs'] = proj4_string
+
+    fname = output_ts_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_smoothn_detrended.tif'
+    save_xarray_old(fname, ds_cr_dtr, f'cr')
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 4:
-        print("Usage: python script.py <site_fpath_S1_GRD> <orbit> <orbit_no>")
-        print('Example: python s1_pre_processing /path/to/site/S1_GRD ASCENDING 58')
+    if len(sys.argv) != 5:
+        print("Usage: python script.py <site_fpath_S1_GRD> <orbit> <orbit_no> <period>")
+        print('Example: python s1_pre_processing /path/to/site/S1_GRD ASCENDING 58 45')
 
     else:
         site_directory = sys.argv[1]  # i.e. '/wp_data/sites/Degero/Sentinel/datacube/S1_GRD'
         orbit = sys.argv[2].upper()
         orbit_no = sys.argv[3]
+        period = sys.argv[4]
 
         if not orbit_no.isdigit():
             print("Error: orbit_no must be a whole number like 58")
@@ -315,6 +324,11 @@ if __name__ == "__main__":
 
         orbit_no = int(orbit_no)  # Convert to integer after validation
 
+        if not period.isdigit():
+            print("Error: period should be a whole number like 45")
+            sys.exit(1)
+
         if orbit not in ['ASCENDING', 'DESCENDING']:
             print('Error: orbit direction must be <ASCENDING> or <DESCENDING>')
-        main(site_directory, orbit, orbit_no)
+        main(site_directory, orbit, orbit_no, period)
+

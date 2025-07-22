@@ -107,8 +107,6 @@ def get_ts(site_directory, json_path):
     transformed_bbox = transform_bbox(bbox, edge_samples=11)
 
     product_dir = [item for item in dir_ if item.startswith('M')]
-    # TODO remove this later
-    # product_dir = ['MCD43A2.061']
     for i, n in enumerate(product_dir):
 
         LOG.info(n)

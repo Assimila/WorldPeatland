@@ -46,7 +46,7 @@ def calc_zonal_stat(data_tif_path, shapefile_path):
         z = zonal_stats(
             shapefile_path,
             data_tif_path,
-            stats="min mean max median",
+            stats="min mean max median percentile_95",
             band=b + 1,
             nodata=_FillValue
         )

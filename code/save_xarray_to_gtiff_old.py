@@ -3,6 +3,7 @@ from osgeo import gdal_array
 import dask.array as da
 import logging
 import numpy as np
+import datetime
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -122,30 +123,45 @@ def save_xarray_old(fname, xarray, data_var, gt=None):
     dst_ds = get_dst_dataset(dst_img=fname, cols=cols, rows=rows,
                  layers=layers, dtype=dtype, proj=proj, gt=gt)
 
-    # keys = ['_FillValue', 'fill_value']
-    # for key in keys:
-    #     if key in xarray.attrs:
-    #         _FillValue = float(xarray.attrs[key])
-    #         break
-    # else:
+    keys = ['_FillValue', 'fill_value']
+    for key in keys:
+        if key in xarray.attrs:
+            _FillValue = float(xarray.attrs[key])
+            break
+    else:
 
-        # _FillValue = float(np.nan)  # Default to NaN if not specified
-        # print("No valid fill value key found in metadata, fill value set as nan.")
+        _FillValue = float(np.nan)  # Default to NaN if not specified
+        print("No valid fill value key found in metadata, fill value set as nan.")
 
     for layer in range(layers):
         dst_band = dst_ds.GetRasterBand(layer + 1)
+        
+        time_keys = ['time', 'RANGEBEGINNINGDATE']
 
         # Date
-        if 'time' in _xarray.dims:
-            dst_band.SetMetadataItem('time',
-                    _xarray.time.data[layer].astype(str))
+        for key in time_keys:
+            if key in _xarray.dims:
+                dt = _xarray[key].data[layer]
+                # If it's numpy.datetime64, convert it
+                if isinstance(dt, np.datetime64):
+                    dt = dt.astype('M8[ms]').astype(datetime.datetime)
+                elif not isinstance(dt, datetime.datetime):
+                    raise TypeError(f"Unsupported time type: {type(dt)}")
+                formatted_time = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                dst_band.SetMetadataItem(key, formatted_time)
+                break  # Stop after the first match
+
+        # dayofyear
+        if 'dayofyear' in _xarray.dims:
+            dst_band.SetMetadataItem('dayofyear',
+                    _xarray.dayofyear.data[layer].astype(str))
 
         # Data variable name
         dst_band.SetMetadataItem('data_var', data_var)
         #TODO check what happens if _FillValue not specified
 
         # _FillValue has to be a float
-        # dst_band.SetNoDataValue(_FillValue)
+        dst_band.SetNoDataValue(_FillValue)
 
         # Check if data is a Dask array
         if isinstance(_xarray[layer].data, da.Array):
@@ -221,6 +237,7 @@ def save_tiff(fname, xarray, data_var):
 
 
     for layer in range(layers):
+        print(fname, layer)
         dst_band = dst_ds.GetRasterBand(layer + 1)
 
         # Date

@@ -30,8 +30,8 @@ def _get_FillValue(opn):
     if set in written in band metadata
     """
 
-    b = opn.GetRasterBand(1)
-    meta = b.GetMetadata()
+    dst_band = opn.GetRasterBand(1)
+    meta = dst_band.GetMetadata()
     x = None
 
     keys = ['_FillValue', 'fill_value']
@@ -116,6 +116,7 @@ def gdal_dt(e):
             '%Y-%m-%dT%H:%M:%S.%f000',
             '%Y-%m-%dT%H:%M:%S.000000000',
             '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S',
             '%Y-%m-%d'
         ]
 
@@ -200,6 +201,7 @@ def gdal_stack_dt(lt):
             dt_formats = [
                 '%Y-%m-%dT%H:%M:%S.000000000',
                 '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%dT%H:%M:%S',
                 '%Y-%m-%d'
             ]
 
@@ -469,3 +471,50 @@ def transform_save(orbit, saved_path):
     os.remove(output_utm)
 
     return output_sinu
+
+
+def _get_times(tif_path):
+    """
+    Get date/time from per-band metadata
+    """
+    d = gdal.Open(tif_path)
+    n_bands = d.RasterCount
+
+    times = []
+
+    for n_band in range(n_bands):
+        b = d.GetRasterBand(n_band+1)
+        md = b.GetMetadata()
+
+        time = md['time']
+        times.append(time)
+
+    # Convert list to DataFrame
+    times = pd.DataFrame(times, columns = ['time'])
+    # Change data type to np.datetime64
+    times.time = pd.to_datetime(times['time'],
+                                format='%Y-%m-%dT%H:%M:%S').to_numpy()
+
+    return times
+
+
+def load_one_ds(fpath, data_var):
+    LOG.info(fpath)
+    times = _get_times(fpath)
+
+    ds = xr.open_dataset(fpath)
+    ds = ds.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
+    ds['time'] = times.time.values
+
+    # rename to 'cr'
+    ds = ds.rename({'band_data': data_var})
+    LOG.info('Done opening tif into xr')
+
+    return ds
+
+def concat_xr(tif_fnames, data_var):
+
+    datasets = [load_one_ds(fp, data_var) for fp in tif_fnames]
+
+    # Concatenate along 'time'
+    return xr.concat(datasets, dim='time')

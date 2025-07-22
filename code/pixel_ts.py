@@ -2,9 +2,7 @@
 from glob import glob
 import os
 import sys
-from datetime import datetime as dt
 import logging
-from osgeo import gdal
 from WorldPeatland.code.download_modis import create_dir, read_config
 from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt, _get_FillValue
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old

@@ -2,13 +2,14 @@ import os.path
 from glob import glob
 import re
 import sys
+import cftime
 import xarray as xr
 from datetime import datetime as dt
 import subprocess
 import logging
 from osgeo import gdal
 from WorldPeatland.code.gdal_sheep import create_xarr
-from WorldPeatland.code.save_xarray_to_gtiff_old import save_tiff
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -124,12 +125,18 @@ def main(ts_path, output_dir):
     # list of tif_paths for the non detrended data variable tif products only
     for path in (glob(f'{ts_path}/*descaled.tif')):
 
+        # Get GeoTransform
+        tmp_ds = gdal.Open(path)
+        gt = tmp_ds.GetGeoTransform()
+        del tmp_ds
+
         ds, var_name = create_xarr_from_tif_path(path)
 
         # remove the wing years which only contains 6 months of the data
         years = ds.coords['time'].dt.year
         first_year = years.min().values
         last_year = years.max().values
+
         ds = ds.sel(time=(years > first_year) & (years < last_year))
 
         # Calculate climatology
@@ -167,9 +174,13 @@ def main(ts_path, output_dir):
         output_path_anomalies = os.path.join(output_dir, f'{var_name}_anomalies.tif')
 
         # edited version of save_xarray_to_gtiff
-        save_tiff(output_path_mean, ds_mean, var_name)
-        save_tiff(output_path_std, ds_std, var_name)
-        save_tiff(output_path_anomalies, ds_anomalies_all_years, var_name)
+        # save_tiff(output_path_mean, ds_mean, var_name)
+        # save_tiff(output_path_std, ds_std, var_name)
+        # save_tiff(output_path_anomalies, ds_anomalies_all_years, var_name)
+
+        save_xarray_old(output_path_mean, ds_mean, var_name, gt)
+        save_xarray_old(output_path_std, ds_std, var_name, gt)
+        save_xarray_old(output_path_anomalies, ds_anomalies_all_years, var_name, gt)
 
 
 if __name__ == "__main__":

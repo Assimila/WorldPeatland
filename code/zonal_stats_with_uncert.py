@@ -1,14 +1,40 @@
 
 import os
 import sys
+import pystac
 import rioxarray
+import xarray as xr
 from glob import glob
 from osgeo import gdal
 import geopandas as gpd
+from shapely.geometry import mapping
 import pandas as pd
 import numpy as np
-from shapely.geometry import mapping
 import matplotlib.pyplot as plt
+
+CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
+
+def read_stac_data(site, variable):
+    """
+    Reads ...
+    """
+    root: pystac.Catalog = pystac.read_file(CATALOG_URL) 
+
+    # Get the sub-catalog for the site
+    catalog: pystac.Catalog = root.get_child("degero")
+
+    # Get the collection for the corresponding variable
+    collection: pystac.Collection = catalog.get_child(variable)
+
+    # This dataset is chunked for spatial reads
+    asset = collection.assets[f"{variable}.xy.zarr"]
+    
+    ds = xr.open_dataset(
+        asset.href,
+        **asset.ext.xarray.open_kwargs,  # type: ignore
+    )
+
+    return ds
 
 def read_data_and_uncertainty(data_path, uncertainty_path):
     """
@@ -218,14 +244,10 @@ if __name__ == "__main__":
         site_directory = sys.argv[1]
         shapefile_path = sys.argv[2]
 
-        variables = ['Lai_500m', 'Fpar_500m', 'Albedo_WSA_Band2',
-                    '1_km_16_days_EVI', 'LST_Day_1km',
-                    'LST_Night_1km', 'LST_Diurnal_1km']
+        variables = ['lai', 'fpar', 'albedo',
+                    'evi', 'lst-day',
+                    'lst-night', 'lst-diurnal-range']
 
-        variables = ['Lai_500m', 'Fpar_500m', 'Albedo_WSA_Band2',
-                    '1_km_16_days_EVI', 'LST_Day_1km',
-                    'LST_Night_1km']
-        
         data = pd.DataFrame()
         variance = pd.DataFrame()
 

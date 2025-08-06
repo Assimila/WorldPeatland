@@ -10,46 +10,38 @@ LOG = logging.getLogger(__name__)
 
 
 def get_dst_dataset(dst_img, cols, rows, layers, dtype, proj, gt):
-    """
-    Create a GDAL data set in Cloud Optimized GeoTIFF (COG) format
-    :param dst_img: Output filenane full path
-    :param cols: Number of columns
-    :param rows: Number of rows 
-    :param layers: Number of layers
-    :param dtype: GDAL type code
-    :param proj: Projection information in WKT format
-    :param gt: GeoTransform tupple
-    :return dst_ds: GDAL destination dataset object
-    """
     gdal.UseExceptions()
+    dst_ds = None
     try:
-        # Default driver options to create a COG
         driver = gdal.GetDriverByName('GTiff')
+        if driver is None:
+            raise RuntimeError("Could not get 'GTiff' driver from GDAL.")
+
         driver_options = ['COMPRESS=DEFLATE',
                           'BIGTIFF=YES',
                           'PREDICTOR=1',
                           'TILED=YES',
                           'COPY_SRC_OVERVIEWS=YES']
 
-        # Create driver
-        dst_ds = driver.Create(dst_img, cols, rows, layers,
-                               dtype, driver_options)
+        dst_ds = driver.Create(dst_img, cols, rows, layers, dtype, driver_options)
+        if dst_ds is None:
+            raise RuntimeError("GDAL driver.Create returned None. Dataset creation failed.")
 
-        # Set cartographic projection
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(gt)
 
     except Exception as err:
+        gdal.DontUseExceptions()
         err_level = gdal.GetLastErrorType()
         err_msg = gdal.GetLastErrorMsg()
 
-        if err_level >= gdal.CE_Warning:
-            # Stop using GDAL exceptions
-            gdal.DontUseExceptions()
-            raise RuntimeError(f"GDAL Error {err_level}: {err_msg}")
+        raise RuntimeError(
+            f"GDAL Error {err_level}: {err_msg if err_msg else str(err)}"
+        ) from err
 
     gdal.DontUseExceptions()
     return dst_ds
+
 
 def get_resolution_from_xarray(xarray):
     """

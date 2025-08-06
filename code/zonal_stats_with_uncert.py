@@ -21,7 +21,7 @@ def read_stac_data(site, variable):
     root: pystac.Catalog = pystac.read_file(CATALOG_URL) 
 
     # Get the sub-catalog for the site
-    catalog: pystac.Catalog = root.get_child("degero")
+    catalog: pystac.Catalog = root.get_child(site)
 
     # Get the collection for the corresponding variable
     collection: pystac.Collection = catalog.get_child(variable)
@@ -68,93 +68,100 @@ def read_data_and_uncertainty(data_path, uncertainty_path):
 
     return lai, uncertainty
 
+def get_pixel_indices_within_classification(dataarray, classification_path):
+    """
+    Returns the indices (band, y, x) of pixels in dataarray that overlap with 
+    the classification in classification_path.
+    """
+    # Read the classification raster
+    classification = rioxarray.open_rasterio(classification_path)
+
+    # Find indices where classification is not nan (i.e., inside the classification)
+    indices = np.argwhere(classification[0].values==1)
+
+    return indices
+
 def get_pixel_indices_within_geometry(dataarray, shapefile_path):
     """
-    Returns the indices (band, y, x) of pixels in dataarray that overlap with the geometry in shapefile_path.
+    Returns the indices (band, y, x) of pixels in dataarray that overlap with 
+    the geometry in shapefile_path.
     """
     # Read the shapefile
     gdf = gpd.read_file(shapefile_path)
     # Reproject geometry to match raster CRS
     gdf = gdf.to_crs(dataarray.rio.crs)
+
     # Rasterize the geometry to the shape of the dataarray
-    mask = dataarray.rio.clip(gdf.geometry.apply(mapping), gdf.crs, drop=False, invert=False)
+    mask = dataarray.rio.clip(gdf.geometry.apply(mapping), gdf.crs,
+            all_touched=True, drop=False, invert=False)
+
     # Find indices where mask is not nan (i.e., inside the geometry)
     indices = np.argwhere(~np.isnan(mask.values))
+
     return indices
 
-def get_weighted_mean(data, uncertainty, indices):
+def get_weighted_mean_and_variance(data, indices, spatial_ratio=25):
     """
-    Calculate weighted mean for the data at the specified indices using uncertainty as weights.
+    Calculate weighted mean and variance for the data at the specified indices using uncertainty as weights.
     Weights are computed as the inverse of the square of uncertainty values.
-    Returns a DataFrame with the weighted mean for each time step and the weights applied.
+    Also computes an uncertainty ratio based on weight distribution.
+    Returns a DataFrame with the weighted mean, and uncertainty for each time step.
     """ 
     if len(indices) == 0:
         return None, None
+
+    _variable, _uncertainty = list(data.keys())
 
     weighted_means = []
-
-    for i in range(data.shape[0]):    
-        # Select pixels inside geometry
-        data_vals = data.values[i, indices[:, 0], indices[:, 1]]
-        unc_vals = uncertainty.values[i, indices[:, 0], indices[:, 1]]
-
-        # Compute weights
-        weights = 1.0 / (unc_vals ** 2)
-        # Avoid division by zero or nan
-        valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
-        data_vals = data_vals[valid]
-        weights = weights[valid]
-
-        if weights.size == 0:
-            weighted_mean = np.nan
-        else:
-            weighted_mean = np.sum(data_vals * weights) / np.sum(weights)
-
-        weighted_means.append(weighted_mean)
-
-    # Create a DataFrame to stores the weighted means
-    df = pd.DataFrame({"weighted_mean": weighted_means}, index=data['time'].values)
-    
-    return df
-
-def get_weighted_variance(data, uncertainty, indices, weighted_mean):
-    """
-    Calculate weighted variance for the data at the specified indices using uncertainty as weights.
-    Weights are computed as the inverse of the square of uncertainty values.
-    Returns a DataFrame with the weighted variance for each time step.
-    """ 
-    if len(indices) == 0:
-        return None, None
-
     weighted_variances = []
+    uncertainties = []
 
-    for i in range(data.shape[0]):    
-        # Select pixels inside geometry
-        data_vals = data.values[i, indices[:, 0], indices[:, 1]]
-        unc_vals = uncertainty.values[i, indices[:, 0], indices[:, 1]]
+    for i in range(data[_variable].shape[0]):
+        print(f"Processing time step {i+1}/{data[_variable].shape[0]}...")
+
+        # Select pixels where classification is 1
+        data_vals = data[_variable].values[i, indices[:, 0], indices[:, 1]]
+        unc_vals = data[_uncertainty].values[i, indices[:, 0], indices[:, 1]]
         
         # Compute weights
         weights = 1.0 / (unc_vals ** 2)
+
         # Avoid division by zero or nan
+        # valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
         valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
         data_vals = data_vals[valid]
         weights = weights[valid]
 
         if weights.size == 0:
             weighted_mean = np.nan
+            uncertainty = np.nan
         else:
-            weighted_spread = np.sum((weights * (data_vals - weighted_mean['weighted_mean'][i])) ** 2)
-            weights_modulator = np.sum(weights)
+            # Calculate weighted mean
+            weighted_mean = np.sum(data_vals * weights) / np.sum(weights)
 
-            weighted_variance = weighted_spread * (1.0 / (weights_modulator ** 2))
+            # Calculate uncertainty
+            unique_weights, counts = np.unique(weights, return_counts=True)
+           
+            # Numerator: for each unique weight, spatial_ratio^2 / count occurrences, multiply by weight, sum
+            numerator = np.sum((spatial_ratio**2 / counts) * unique_weights)
 
-        weighted_variances.append(weighted_variance)
+            # Denominator: for each unique weight, count occurrences, multiply by weight, sum
+            denominator = np.sum(counts * unique_weights)
+            
+            # Compute the ratio
+            uncertainty = numerator / denominator if denominator != 0 else np.nan
 
-    # Create a DataFrame to stores the weighted means
-    df = pd.DataFrame({"weighted_variance": weighted_variances}, index=data['time'].values)
+            print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
+
+        weighted_means.append(weighted_mean)
+        uncertainties.append(uncertainty)
+
+    # Create a DataFrame to stores the weighted means, variances, and uncertainty ratios
+    df = pd.DataFrame({"weighted_mean": weighted_means,
+                       "uncertainty": uncertainties},
+                      index=data['time'].values)
     
     return df
-
 
 def create_plot(weighted_mean, weighted_variance, variable):
     """
@@ -165,17 +172,17 @@ def create_plot(weighted_mean, weighted_variance, variable):
 
     # Plot weighted mean time series
     ax.plot(weighted_mean.index,
-            weighted_mean['weighted_mean'],
+            weighted_mean,
             label=f"{variable} - weighted mean", color="C0")
 
     # Compute standard deviation from variance
-    std = np.sqrt(weighted_variance['weighted_variance'].values)
+    std = np.sqrt(weighted_variance.values)
 
     # Fill between mean ± std
     ax.fill_between(
         weighted_mean.index,
-        weighted_mean['weighted_mean'] - std,
-        weighted_mean['weighted_mean'] + std,
+        weighted_mean - std,
+        weighted_mean + std,
         color="C0",
         alpha=0.3,
        label=f"{variable} - weighted std dev"
@@ -191,46 +198,30 @@ def create_plot(weighted_mean, weighted_variance, variable):
 
     plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert.png", dpi=150)
 
-def extract_zonal_stats(variable, site_directory,
-                        shp_fname, plot=False):
+def extract_zonal_stats(variable, site,
+                        classification_fname, plot=False):
     """
     Extract zonal stats using associated uncertainties
         The stats then will be linearly interpolated to create
         synthetic daily data
     """
-    # Data
-    fname = f'*._{variable}.linear.smoothn.*.descaled.tif'
-    data_fname =  glob(os.path.join(site_directory, fname))[0]
-    if len(data_fname) == 0:
-        print(f"File {data_fname} not found")
-        return
-
-    # Uncertainty
-    fname = f'*._{variable}.linear.smoothn.*_qa_weighted_std_dev.tif'
-    uncertainty_fname = glob(os.path.join(site_directory, fname))[0]
-    if len(uncertainty_fname) == 0:
-        print(f"File {uncertainty_fname} not found")
-        return
-
     # Read data and associated uncertainty
-    data, uncertainty = read_data_and_uncertainty(data_fname,
-                                                  uncertainty_fname)
+    data = read_stac_data(variable=variable, site=site)
+
     # Get the indices within the geometry
-    indices = get_pixel_indices_within_geometry(data[0], shp_fname)
+    indices = get_pixel_indices_within_classification(data, classification_fname)
 
     # Compute stats
-    weighted_mean = get_weighted_mean(data, uncertainty, indices)
-    weighted_variance = get_weighted_variance(data, uncertainty,
-                                              indices, weighted_mean)
+    weighted_stats = get_weighted_mean_and_variance(data, indices)
 
     # Linear interpolation to create synthetic daily data
-    weighted_mean = weighted_mean.resample('D').interpolate('linear')
-    weighted_variance = weighted_variance.resample('D').interpolate('linear')
+    weighted_mean = weighted_stats['weighted_mean'].resample('D').interpolate('linear')
+    uncertainty = weighted_stats['uncertainty'].resample('D').interpolate('linear')
 
     if plot == True:
-        create_plot(weighted_mean, weighted_variance, variable)
+        create_plot(weighted_mean, uncertainty, variable)
 
-    return weighted_mean, weighted_variance
+    return weighted_mean, uncertainty
 
 
 if __name__ == "__main__":
@@ -239,26 +230,32 @@ if __name__ == "__main__":
 
         # Check inputs
         print((f"Usage: python .zonal_stats_with_uncert.py"
-               f"<site_root_data_dir> <shapefile_path>"))
+               f"<site_root_data_dir> <peatland_extent_path>"))
     else:
-        site_directory = sys.argv[1]
-        shapefile_path = sys.argv[2]
+        # Site name e.g. Degero
+        # site = sys.argv[1]
+        site = "degero"
+
+        # Full path of the peatland classification GeoTiff
+        # classification_fname = sys.argv[2]
+        classification_fname = "/wp_data/sites/Degero/WhatSARpeat/WhatSARPeat2024_Degero.tif"
 
         variables = ['lai', 'fpar', 'albedo',
                     'evi', 'lst-day',
                     'lst-night', 'lst-diurnal-range']
 
         data = pd.DataFrame()
-        variance = pd.DataFrame()
+        uncertainty = pd.DataFrame()
 
         for variable in variables:
             print(f"Processing {variable}...")
-            w_mu, w_var = extract_zonal_stats(variable, site_directory,
-                                              shapefile_path, plot=False)
-            
-            data[variable] = w_mu['weighted_mean']
-            variance[variable] = w_var['weighted_variance']
+            w_mu, w_unc = extract_zonal_stats(variable, site,
+                                              classification_fname, plot=True)
+            print(w_mu, w_unc)
+
+            data[variable] = w_mu
+            uncertainty[variable] = w_unc
 
         filename = "time_series.h5"
         data.to_hdf(filename, key="data")
-        variance.to_hdf(filename, key="variance")
+        uncertainty.to_hdf(filename, key="uncertainty")

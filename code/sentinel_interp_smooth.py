@@ -7,22 +7,29 @@ from dask.diagnostics import ProgressBar
 from WorldPeatland.code.utils import create_dir, proj4_extract
 from WorldPeatland.code.gdal_sheep import gdal_stack_dt, create_xarr
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
-from WorldPeatland.code.s1_pre_processing import process_and_save_block
+from WorldPeatland.code.s1_pre_processing import process_and_save_block, DW_smoothn_smooth_xarray
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 
-def interpolate_and_save_block(block, save_path):
+def interpolate_block(block):
     """
     interpolate a single block and save it to disk.
     """
-    interpolated_result = block.interpolate_na(dim='time', method='linear')
-    interpolated_result.to_netcdf(save_path)
-    LOG.info(f'{save_path} successfully saved')
+    block.interpolate_na(dim='time', method='linear')
+    LOG.info(f'Linear interpolation successful')
 
 
-def process_large_dask_chunks(dask_dataset, block_size, var_name , flag, output_dir):
+def process_smoothn_block(block, var_name, window_size, flag):
+    """
+    Smooth a single block and save it to disk.
+    """
+    DW_smoothn_smooth_xarray(block, var_name, window_size, flag)
+    LOG.info(f'smoothn {window_size} successfully computed')
+
+
+def process_large_dask_chunks(dask_dataset, block_size, var_name, flag, output_dir):
     """
     Process a large Dask dataset by splitting it into smaller spatial blocks, smoothing each block,
     saving the results, and then recombining them.
@@ -45,49 +52,77 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name , flag, output_
                                           longitude=slice(lon_start, lon_end))
 
                 # 1st smoother
-                window_size = 3
-                block_path_s1 = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.smoothn{window_size}.nc"
-                process_and_save_block(block, block_path_s1, var_name, window_size, flag)
-                logging.info(f'{block_path_s1} successfully saved')
-
+                window_size1 = 1.5
+                process_smoothn_block(block, var_name, window_size1, flag)
 
                 # interpolation
-                block_path_s1_linear = block_path_s1.replace('.nc', '.linear.nc')
-                interpolate_and_save_block(block, block_path_s1_linear)
-
+                interpolate_block(block)
 
                 # 3rd smoother
-                window_size = 30
-                block_path_s1_linear_s2 = block_path_s1_linear.replace('.nc', f'.smoothn{window_size}.nc')
-                process_and_save_block(block, block_path_s1_linear_s2, var_name, window_size, flag)
+                window_size2 = 30
+                block_path_s1_linear_s2 = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.smoothn{window_size1}.linear.smoothn{window_size2}.nc"
+                process_and_save_block(block, block_path_s1_linear_s2, var_name, window_size2, flag)
 
                 processed_blocks.append(block_path_s1_linear_s2)
-
 
     logging.info('Opening all smoothed blocks in one xarray')
     processed_datasets = xr.open_mfdataset(processed_blocks, chunks={"latitude": 256, "longitude": 256})
 
-    # Clean up temporary output blocks
-    # for block_path in smoothed_blocks:
-    #     os.remove(block_path)
-    # os.rmdir(output_dir)
-    # logging.info('Smoothed blocks successfully combined and temporary files deleted')
+    logging.info('Smoothed blocks successfully combined')
+    return processed_datasets
+
+
+def process_large_dask_chunks_2(dask_dataset, block_size, var_name, period, output_dir):
+    """
+    Process a large Dask dataset by splitting it into smaller spatial blocks, smoothing each block,
+    saving the results, and then recombining them.
+    """
+    latitude_chunks = range(0, dask_dataset.latitude.size, block_size)
+    longitude_chunks = range(0, dask_dataset.longitude.size, block_size)
+
+    # store paths to all blocks after smoothn1 + linear + smoothn2
+    processed_blocks = []
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    with ProgressBar():
+        for lat_start in latitude_chunks:
+            for lon_start in longitude_chunks:
+                lat_end = min(lat_start + block_size, dask_dataset.latitude.size)
+                lon_end = min(lon_start + block_size, dask_dataset.longitude.size)
+
+                block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
+                                          longitude=slice(lon_start, lon_end))
+
+                # detrending
+                save_path = f"{output_dir}/{lat_start}_{lon_start}.dtr.{period}.nc"
+
+                result = block.rolling(time=period, min_periods=1, center=True).mean()
+                result.to_netcdf(save_path)
+                # result = result.to_dataset(name=var_name)
+
+                processed_blocks.append(save_path)
+                LOG.info(f'{save_path} successfully saved')
+
+    logging.info('Opening all detrended blocks in one xarray')
+    processed_datasets = xr.open_mfdataset(processed_blocks, chunks={"latitude": 256, "longitude": 256})
+
+    logging.info('Detrending blocks successfully combined')
     return processed_datasets
 
 
 def main(site_dir):
     LOG.info(f"Processing site directory: {site_dir}")
 
-    mleonn_path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN', '*')
+    mleonn_path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN', 'lai')
     paths = glob(mleonn_path)
 
-
-    if not paths:  # If paths list is empty
+    # If paths list is empty
+    if not paths:
         raise FileNotFoundError(f"No MLEONN data products folders found in the specified directory path {mleonn_path}.")
 
     # Loop over the different MLEONN data products i.e. LAI, cab ...
     for p in paths:
-        p = '/wp_data/sites/Degero/Sentinel/MSIL2A/datacube/MLEONN/lai'
         var_name = os.path.basename(p)
         LOG.info(f'Starting interpolation for {var_name}')
 
@@ -97,7 +132,7 @@ def main(site_dir):
         stacked_arr, dts, saved_opn = gdal_stack_dt(tif_files)
         data_with_nan = create_xarr(saved_opn, var_name, stacked_arr, dts)
         # create directory to interpol
-        interp_dir = create_dir(p, 'interpolated_test')
+        interp_dir = create_dir(p, 'interpolated')
         proj4_string = proj4_extract(saved_opn)
 
         LOG.info('Dask chucking began')
@@ -118,18 +153,32 @@ def main(site_dir):
         fname = f'{var_name}.smoothn3.linear.smoothn30.tif'
         output_dir = os.path.join(interp_dir, fname)
 
-        # TODO remove tests
-        # smoothed_result = rioxarray.open_rasterio(output_dir)
-        # data = smoothed_result.values
-        # smoothed_result = smoothed_result.rename({'x': 'lon', 'y': 'lat', 'band': 'time'})
-        # smoothed_result = smoothed_result.assign_coords({
-        #     'time': dts,  # Replace band indices with datetime values
-        # })
-
         # set extract and set proj 4 to xarray
         processed_result.attrs['crs'] = proj4_string
         save_xarray_old(output_dir, processed_result, var_name)
+
+        # Detrend with a period of 73, check how many observations do we have per year
+        dask_chunks = processed_result.chunk({"time": -1, "latitude": 5, "longitude": 5})
+        period = 182
+        output_blocks_dir = create_dir(interp_dir, 'dask_processing_outputs_dtr')
+        ds_dtr = process_large_dask_chunks_2(
+            dask_dataset=dask_chunks,
+            block_size=100,  # Spatial block size
+            var_name=var_name,  # Variable to smooth
+            period=period,  # Smoothing flag
+            output_dir=output_blocks_dir,
+        )
+
+        LOG.info(f'Detrending mleon product')
+        ds_dtr = ds_dtr.astype('float32')
+        ds_dtr.attrs['crs'] = proj4_string
+
+        fname = f'{var_name}.smoothn3.linear.smoothn30.detrended.{period}.tif'
+        output_dir = os.path.join(interp_dir, fname)
+        save_xarray_old(output_dir, ds_dtr, var_name)
+
         LOG.info('Script process Done!')
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

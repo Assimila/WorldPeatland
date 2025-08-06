@@ -7,7 +7,7 @@ import numpy as np
 from osgeo import gdal
 import logging
 
-from WorldPeatland.code.gdal_sheep import (gdal_stack_dt, create_coord_list, gdal_dt, create_xarr, reproject_image,
+from WorldPeatland.code.gdal_sheep import (gdal_dt, create_xarr, reproject_image,
                                            get_proj4_from_tif)
 from WorldPeatland.code.MLEO_NN import (LAI_evaluatePixelOrig, FAPAR_evaluatePixelOrig, FC_evaluatePixel,
                                         CAB_evaluatePixel)
@@ -98,56 +98,15 @@ def prepare_run_MLEONN(bd, opn, month_tif, reflectance_tifs):
 
     # process MLEONN as one timestep per raster band
     lai = LAI_evaluatePixelOrig(input_dict)
-    fapar = FAPAR_evaluatePixelOrig(input_dict)
-    fc = FC_evaluatePixel(input_dict)
-    cab = CAB_evaluatePixel(input_dict)
+    # fapar = FAPAR_evaluatePixelOrig(input_dict)
+    # fc = FC_evaluatePixel(input_dict)
+    # cab = CAB_evaluatePixel(input_dict)
 
     # Empty the input_dict
     input_dict = None
     LOG.info(f'MLEONN four products successfully formed for {time}')
 
-    return lai, fapar, fc, cab, time
-
-
-def directional_distance_transform(is_cloud, saa, max_distance):
-    """
-    Projects distances from clouds in a specific direction.
-
-    Parameters:
-    is_cloud (np.ndarray): Binary mask where clouds are marked with 1 and non-clouds with 0.
-    saa (float): Solar Azimuth Angle - direction in degrees (0-360) where 0 is North.
-    max_distance (int): Maximum distance to project.
-
-    Returns:
-    np.ndarray: Distance transform array.
-    """
-    # Convert azimuth to radians
-    azimuth_rad = np.deg2rad(90 - saa)
-
-    # Calculate the direction vector
-    dx = np.sin(azimuth_rad)
-    dy = np.cos(azimuth_rad)
-
-    # Initialize the distance transform array
-    distance_transform = np.full(is_cloud.shape, np.inf)
-
-    # Get the indices of cloud pixels
-    cloud_indices = np.argwhere(is_cloud.data == 1)
-
-    for y, x in cloud_indices:
-        for d in range(1, max_distance + 1):
-            # Calculate the new position
-            new_x = int(round(x + d * dx))
-            new_y = int(round(y + d * dy))
-
-            # Check if the new position is within bounds
-            if 0 <= new_x < is_cloud.shape[1] and 0 <= new_y < is_cloud.shape[0]:
-                distance_transform[new_y, new_x] = min(distance_transform[new_y, new_x], d)
-
-    # Replace inf with 0 for non-cloud areas
-    distance_transform[np.isinf(distance_transform)] = 0
-
-    return distance_transform
+    return lai, time # fapar, fc, cab,
 
 
 def create(var_arr, cloud_mask, dts, opn, varname, proj4_string, path, timestep):
@@ -201,7 +160,7 @@ def main(site_dir):
     # Path to B02 datacube tiff files
     pattern = os.path.join(s2_path, 'B02', '*.tif')
     # get B02 monthly tif files
-    B02_tif_files_list = glob(pattern)
+    B02_tif_files_list = sorted(glob(pattern))
 
     # Set reflectance bands list
     bands = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B11', 'B12']
@@ -238,27 +197,21 @@ def main(site_dir):
         for bd in range(1, opn.RasterCount + 1):  # gdal starts raster band count from 1
             # PREPARE INPUT BAND SR AND RUN MLEONN
             LOG.info(f'MLEONN process starting for {timestep}')
-            lai, fapar, fc, cab, specific_date = prepare_run_MLEONN(bd, opn, month_tif, reflectance_tifs)
+            lai, specific_date = prepare_run_MLEONN(bd, opn, month_tif, reflectance_tifs) #fapar, fc, cab,
             dts.append(specific_date)
             lai_list.append(lai)
-            fapar_list.append(fapar)
-            fc_list.append(fc)
-            cab_list.append(cab)
+            # fapar_list.append(fapar)
+            # fc_list.append(fc)
+            # cab_list.append(cab)
 
         # stack the arrays
         lai_array = np.stack(lai_list, axis=0)
-        fapar_array = np.stack(fapar_list, axis=0)
-        fc_array = np.stack(fc_list, axis=0)
-        cab_array = np.stack(cab_list, axis=0)
+        # fapar_array = np.stack(fapar_list, axis=0)
+        # fc_array = np.stack(fc_list, axis=0)
+        # cab_array = np.stack(cab_list, axis=0)
 
-        # Create cloud mask
-
-        LOG.info(f'Cloud mask processing started')
-        # Set thresholds
-        CLD_PRB_THRESH = 0.5
-        # NIR dark pixel reflectance threshold is set to 0.15 already descaled
-        NIR_DRK_THRESH = 0.25
-        maxDis = 500
+        # Create mask
+        LOG.info(f'Mask processing started')
 
         # Reproject SCL layer once per timestep
         pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'SCL', f'*{timestep}.tif')
@@ -266,61 +219,44 @@ def main(site_dir):
         # Resample the SCL band (downscaling the SCL band pixel originally 60m to 20m)
         SCL_gdalobj = reproject_image(fname, month_tif)
         SCL_resampled = SCL_gdalobj.ReadAsArray()  # array dtype=uint8
-        water_class = 6
-        water_pixels = (SCL_resampled == water_class)  # dtype numpy array
-        # Check if arr is 2D make it 3D to fit the time dimension
-        if water_pixels.ndim == 2:
-            water_pixels = water_pixels[np.newaxis, :]
 
-        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'B08', f'*{timestep}.tif')
-        fname = glob(pattern)[0]
+        # Create masks for each class based on SCL
+        is_water = (SCL_resampled == 6).astype(bool)
+        is_snow = (SCL_resampled == 11).astype(bool)
+        is_cirrus = (SCL_resampled == 10).astype(bool)
+        is_cloud = ((SCL_resampled == 8) | (SCL_resampled == 9)).astype(bool)
+        is_shadow = (SCL_resampled == 3).astype(bool)
 
-        b8_arr, dts, saved_opn = gdal_dt(fname)
-        # Check if arr is 2D make it 3D to fit the time dimension
-        if b8_arr.ndim == 2:
-            b8_arr = b8_arr[np.newaxis, :]
-
-        b8_arr = b8_arr / 10000.0  # apply scaling factor
-
-        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL1C', 'datacube', 'S2_TOA', 'cprob', f'*{timestep}.tif')
-        fname = glob(pattern)[0]
-        cloud_probability, dts, saved_opn = gdal_dt(fname)
-        # Check if arr is 2D make it 3D to fit the time dimension
-        if cloud_probability.ndim == 2:
-            cloud_probability = cloud_probability[np.newaxis, :]
-
-        is_cloud = (cloud_probability > CLD_PRB_THRESH).astype(bool)
-        dark_pixels = (b8_arr < NIR_DRK_THRESH).astype(bool)
-
-        # get angular information from B2 in band metadata
-        pattern = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'S2_SR', 'B02', f'*{timestep}.tif')
-        fname = glob(pattern)[0]
-
-        dataset = gdal.Open(fname)
-        band = dataset.GetRasterBand(bd)
-        metadata = band.GetMetadata()  # metadata is a dict
-        saa = metadata.get("saa", "No 'saa' metadata found")
-        saa = float(saa)
-
-        distance_transform = (directional_distance_transform(is_cloud, saa, maxDis) > 0).astype(bool)
-        shadows = dark_pixels * distance_transform
         # Create cloud mask logic using the water_pixels for the current inband timestep
         # Get the numpy arrays of the xr.datasets to preserve shape
-        cloud_mask = (is_cloud | shadows) & ~water_pixels  # dtype numpy array
-        LOG.info(f'Cloud mask successfully formed for {timestep}')
+        # lai_array > 8.0 removing impossible values of LAI according to S2Toolbox Level2Products version 2.0
+        # table 9.
+        mask = (
+                is_cloud | is_shadow | is_snow | is_cirrus |
+                (lai_array > 8.0) | (lai_array < 0) | is_water
+        ) # dtype numpy array
+        # Construct file path and save
+        proj4_string = get_proj4_from_tif(month_tif)
+
+        path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN')
+        output_dir = create_dir(path, 'mask')
+        fname = os.path.join(output_dir, f"mask_{timestep}.tif")
+        ds_mask = create_xarr(opn, 'bool', mask, dts)
+        ds_mask.attrs['crs'] = proj4_string
+        save_xarray_old(fname, ds_mask, 'bool')
+
+        LOG.info(f'Mask successfully formed & saved for {timestep}')
 
         variables = {
             'lai': lai_array,
-            'fapar': fapar_array,
-            'fc': fc_array,
-            'cab': cab_array
+            # 'fapar': fapar_array,
+            # 'fc': fc_array,
+            # 'cab': cab_array
         }
 
-        proj4_string = get_proj4_from_tif(month_tif)
-        path = os.path.join(site_dir, 'Sentinel', 'MSIL2A', 'datacube', 'MLEONN')
         for varname, var_arr in variables.items():
             LOG.info(f"Processing {varname}...")
-            create(var_arr, cloud_mask, dts, opn, varname, proj4_string, path, timestep)
+            create(var_arr, mask, dts, opn, varname, proj4_string, path, timestep)
 
 
 if __name__ == "__main__":

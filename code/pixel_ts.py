@@ -3,6 +3,9 @@ from glob import glob
 import os
 import sys
 import logging
+
+import numpy as np
+
 from WorldPeatland.code.download_modis import create_dir, read_config
 from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt, _get_FillValue
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
@@ -14,7 +17,7 @@ LOG.setLevel(logging.DEBUG)
 '''pixel_ts is the 5th code to run it will apply the scaling factor and detrend the time series'''
 
 
-def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
+def pixel_ts(path, site_directory, _data_var, fill_value, scaling_factor, period, detrend):
     
     """
     pixel_ts function will open the tatssi geotiff linear and smoothened files, it will multiply it
@@ -35,8 +38,8 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
     arr, dts, saved_opn = gdal_dt(path)
     # put the tiff in an xarray
     ds = create_xarr(saved_opn, _data_var, arr, dts)
-    # Get fill value from geotiff
-    _FillValue = _get_FillValue(saved_opn)
+    # Apply fill_value
+    ds_nan = ds.where(ds != float(fill_value), np.nan)
     
     if _data_var == '_Lai_500m':
         scaling_factor = '0.1'
@@ -46,7 +49,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
         scaling_factor = scaling_factor
 
     # multiply by scaling factor
-    ds = ds*float(scaling_factor)
+    ds_nan = ds_nan*float(scaling_factor)
     LOG.info(f'multiplying by the scale factor of {scaling_factor}')
 
     base, extension = os.path.splitext(os.path.basename(path))
@@ -62,7 +65,7 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
         output_fname = f"{path_analytics}/{new_fname}"
 
         # detrend ts 
-        trend_ds = ds[_data_var].rolling(time=int(period), min_periods=1, center=True).mean()
+        trend_ds = ds_nan[_data_var].rolling(time=int(period), min_periods=1, center=True).mean()
         ds_output = trend_ds.to_dataset(name=_data_var)
       
     # if ds was not detrended...
@@ -71,14 +74,14 @@ def pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend):
         new_fname = f"{base}.descaled{extension}"
         output_fname = f"{path_analytics}/{new_fname}"
         
-        ds_output = ds
+        ds_output = ds_nan
     
     # add the crs to the attributes of the xarray, so it is there when saving the detrended final ts tif
     # in this case we are making all projection sinusoidal like tatssi
     ds_output.attrs['crs'] = '+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs '
 
     # Add FillValue to attributes
-    ds_output.attrs['_FillValue'] = _FillValue
+    ds_output.attrs['_FillValue'] = np.nan
 
     # save the xarray into a tif file 
     save_xarray_old(output_fname, ds_output, _data_var, saved_opn.GetGeoTransform())
@@ -94,7 +97,7 @@ def main(site_directory, value):
     config = glob(site_directory + f'/*_config.yml')
     config_fname = config[0]
     start_date, end_date, products = read_config(config_fname)
-    
+
     for i, j in enumerate(products):
     
         product = j['product']
@@ -106,8 +109,8 @@ def main(site_directory, value):
 
         for _data_var in _data_var_list:
 
-            scaling_factor, s, smoothing_method, period = (
-                j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period'])
+            fill_value, scaling_factor, s, smoothing_method, period = (
+                j['fill_value'], j['scaling_factor'], j['smooth_factor'], j['smooth_method'], j['period'])
             pattern = (
                     site_directory +
                     f'MODIS/{product}/*/*/interpolated/*.{_data_var}.linear.{smoothing_method}.{s}.tif')
@@ -115,7 +118,7 @@ def main(site_directory, value):
             
             LOG.info(f'Processing this file {path}')
 
-            pixel_ts(path, site_directory, _data_var, scaling_factor, period, detrend=value)
+            pixel_ts(path, site_directory, _data_var, fill_value, scaling_factor, period, detrend=value)
 
     
 if __name__ == "__main__":

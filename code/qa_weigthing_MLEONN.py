@@ -1,136 +1,180 @@
-
 import os.path as osp
 import sys
 from glob import glob
+import pandas as pd
+import os
+from dask.diagnostics import ProgressBar
+import numpy as np
 import xarray as xr
 import rioxarray
 import rasterio
 import osgeo.gdal as gdal
+import logging
+from WorldPeatland.code.utils import create_dir
+from WorldPeatland.code.gdal_sheep import get_proj4_from_tif
+from WorldPeatland.code.save_xarray_to_gtiff_old import save_xarray_old
+
+LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
 
 site = sys.argv[1]
 
-# MODIS LST, nominal_uncert_data ~2.0K
-lst_day = {'product' : 'MYD11A1.061',
-           'variable' : 'LST_Day_1km',
-           'uncert_var' : 'LST_Day_StdDev_1km',
-           'smooth_factor' : 0.5,
-           'scaling_factor' : 0.02,
-           'weighting_factor' : 0.02,
-           'nominal_uncert_data' : 2.0}
+# MLEONN lai RMSE: 0.7 for validation
+# Reference S2 ToolBox ATBD V2.0
+lai = {'variable': 'lai',
+       'uncertainty_variable':'lai_unc',
+       'weighting_factor': 0.02,
+       'nominal_uncert_data': 0.7}
 
-lst_night = {'product' : 'MYD11A1.061',
-             'variable' : 'LST_Night_1km',
-             'uncert_var' : 'LST_Night_StdDev_1km',
-             'smooth_factor' : 0.5,
-             'scaling_factor' : 0.02,
-             'weighting_factor' : 0.02,
-             'nominal_uncert_data' : 2.0}
 
-# Strahler et al. (1999) and Schaaf et al. (2002) report:
-# NIR band white-sky albedo RMSE ~0.02–0.05 in vegetated areas
-# nominal_uncert_data = 0.03
-albedo = {'product' : 'MCD43A3.061',
-          'variable' : 'Albedo_WSA_Band2',
-          'uncert_var' : 'Albedo_WSA_Band2_StdDev_500m',
-          'smooth_factor' : 0.5,
-          'scaling_factor' : 0.001,
-          'weighting_factor' : 0.02,
-          'nominal_uncert_data' : 0.03}
+def _get_times(tif_path):
+    """
+    Extract datetime64 values from per-band metadata in a GeoTIFF.
+    """
+    d = gdal.Open(tif_path)
+    n_bands = d.RasterCount
 
-evi = {'product' : 'MOD13A2.061',
-       'variable' : '1_km_16_days_EVI',
-       'uncert_var' : '1_km_16_days_EVI_StdDev_1km',
-       'smooth_factor' : 0.5,
-       'scaling_factor' : 0.0001,
-       'weighting_factor' : 0.02,
-       'nominal_uncert_data' : 0.05}
+    times = []
 
-products = [lst_day, lst_night, albedo, evi]
+    for n_band in range(n_bands):
+        b = d.GetRasterBand(n_band + 1)
+        md = b.GetMetadata()
+        times.append(md['time'])
+
+    # Convert to pandas datetime Series and return as numpy array
+    return pd.to_datetime(times, format='%Y-%m-%dT%H:%M:%S').to_numpy()
+
+
+def process_large_dask_chunks(dask_datasets, block_size, nominal_uncert, unc_weight, save_dir):
+    """
+    Process large Dask datasets by splitting into time chunks, applying weighting, and saving results.
+    """
+    mleo_arr, mask_arr = dask_datasets
+
+    latitude_chunks = range(0, mleo_arr.latitude.size, block_size)
+    longitude_chunks = range(0, mleo_arr.longitude.size, block_size)
+
+    # store paths to all blocks after smoothn1 + linear + smoothn2
+    processed_blocks = []
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    with ProgressBar():
+        for lat_start in latitude_chunks:
+            for lon_start in longitude_chunks:
+                lat_end = min(lat_start + block_size, mleo_arr.latitude.size)
+                lon_end = min(lon_start + block_size, mleo_arr.longitude.size)
+
+                mleo_block = mleo_arr.isel(latitude=slice(lat_start, lat_end),
+                                           longitude=slice(lon_start, lon_end))
+
+                mask_block = mask_arr.isel(latitude=slice(lat_start, lat_end),
+                                           longitude=slice(lon_start, lon_end))
+
+                # Apply weighting where mask == 0
+                weighted_block = xr.where(
+                    mask_block == 0,
+                    mleo_block * unc_weight,
+                    xr.full_like(mleo_block, nominal_uncert)
+                )
+
+                result = weighted_block.compute()
+                save_path = os.path.join(save_dir, f"{lat_start}_{lon_start}.weighted.nc")
+                result.to_netcdf(save_path)
+
+                processed_blocks.append(save_path)
+                LOG.info(f'{save_path} successfully saved')
+
+    logging.info('Combining all weighted uncertainty blocks into one xarray dataset')
+    combined = xr.open_mfdataset(processed_blocks, chunks={"latitude": 256, "longitude": 256})
+    logging.info('Weighted uncertainty blocks successfully combined')
+
+    return combined
+
+
+# TODO later on add the other mleonn products
+products = [lai]
 
 for _product in products:
 
-    product = _product['product']
     variable = _product['variable']
-    uncert_var = _product['uncert_var']
-    smooth_factor = _product['smooth_factor']
-    scaling_factor = _product['scaling_factor']
+    var_name = _product['uncertainty_variable']
     weighting_factor = _product['weighting_factor']
     nominal_uncert_data = _product['nominal_uncert_data']
 
-    # Paths to the VRT file and mask file
-    data_file = f"/wp_data/sites/{site}/MODIS/{product}/h??v??/{variable}/interpolated/{product}._{variable}.linear.smoothn.{smooth_factor}.tif"
-    data_file = glob(data_file)[0] 
+    # Paths to the interpolated and smoothed time series
+    data_file = f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/{variable}.smoothn3.linear.smoothn30.tif"
+    data_file = glob(data_file)[0]
 
-    mask_file = f"/wp_data/sites/{site}/MODIS/analytics_QA_settings/_{variable}_qa_analytics_mask.tif"
-    mask_file = glob(mask_file)[0]
+    # Open the mask monthly Geotif and put in one xarray
+    mask_monthly_tifs = sorted(glob(f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/mask/*.tif"))
 
-    output_dir = f'/wp_data/sites/{site}/MODIS/timeSeries'
+    #  Load and prepare all datasets
+    datasets = []
+    all_times = []
+
+    for fpath in mask_monthly_tifs:
+        data = rioxarray.open_rasterio(fpath)
+        data = data.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
+        datasets.append(data)
+
+        # Extract real time values from metadata
+        times = _get_times(fpath)
+        all_times.extend(times)
+
+    # Concatenate a long time axis
+    mask = xr.concat(datasets, dim='time')
+
+    # Replace dummy time with real datetime
+    mask = mask.assign_coords(time=all_times)
+
+    output_dir = f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/"
     output_fname = osp.basename(data_file.replace(".tif", "_qa_weighted_std_dev.tif"))
     output_fname = osp.join(output_dir, output_fname)
 
     # Open the VRT file using rioxarray
-    data = rioxarray.open_rasterio(data_file, mask_and_scale=True).astype("float32") * scaling_factor
+    mleo_data = rioxarray.open_rasterio(data_file).astype("float32")
+    mleo_data = mleo_data.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
+    mleo_data = mleo_data.assign_coords(time=all_times)
 
-    # Deep copy the data to a new variable
-    data_stddev = data.copy(deep=True)
-
-    data_stddev.data[:,:,:] = nominal_uncert_data
-
-    # Open the mask file using rioxarray
-    mask = rioxarray.open_rasterio(mask_file)
 
     # Check if both layers have the same shape
-    if data.shape == mask.shape:
-        print("The data and mask have the same shape.")
+    if mleo_data.shape == mask.shape:
+        LOG.info("The data and mask have the same shape.")
     else:
-        print("The data and mask do not have the same shape.")
-        print(f"Data shape: {data.shape}")
-        print(f"Mask shape: {mask.shape}")
+        LOG.info("The data and mask do not have the same shape.")
+        LOG.info(f"Data shape: {mleo_data.shape}")
+        LOG.info(f"Mask shape: {mask.shape}")
         raise ValueError("Data and mask shapes do not match.")
 
-    # Set uncertainties
-    data_stddev_weighted = xr.where(mask == 0, data * weighting_factor, data_stddev)
+    # Apply chunking before any computation
+    block_size = 100
+    mleo_data = mleo_data.chunk({'time': -1, "latitude": 5, "longitude": 5})
+    mask = mask.chunk({'time': -1, "latitude": 5, "longitude": 5})
+
+    LOG.info('Begin block processing]')
+    output_blocks_dir = create_dir(f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/",
+                                   'dask_processing_outputs')
+    data_stddev_weighted = process_large_dask_chunks(
+        dask_datasets=[mleo_data, mask],  # list of the chunked datasets needed to calculate weighted unc
+        block_size=block_size,  # Temporal block size
+        nominal_uncert=nominal_uncert_data,
+        unc_weight=weighting_factor,  # weighting factor for inflating the uncertainty
+        save_dir=output_blocks_dir,
+    )
+
+    data_stddev_weighted = data_stddev_weighted.astype('float32')
+    data_stddev_weighted = data_stddev_weighted.assign_coords(time=all_times)
+    data_stddev_weighted.attrs['_FillValue'] = np.nan
 
     # Add the new weighted variable stddev as a new variable in the dataset
-    xarray_data = data.to_dataset(name="data")
-    xarray_data[uncert_var] = data_stddev_weighted
+    data_stddev_weighted = data_stddev_weighted.rename({'time': 'RANGEBEGINNINGDATE',
+                                                        '__xarray_dataarray_variable__': var_name})
+    get_proj4_from_tif(data_file, data_stddev_weighted)
+    opn = gdal.Open(data_file)
+    save_xarray_old(output_fname, data_stddev_weighted, var_name, opn.GetGeoTransform())
 
-    # Extract per-band tags using rasterio
-    with rasterio.open(data_file) as src:
-        tags_per_band = [src.tags(i) for i in range(1, src.count + 1)]
-        geotransform = src.transform.to_gdal()
-        projection = src.crs.to_wkt()
-
-    bands, height, width = xarray_data[uncert_var].data.shape
-
-    # Save the updated dataset to a Cloud Optimized GeoTIFF
-    print(output_fname)
-
-    # Create output with GDAL
-    driver = gdal.GetDriverByName("GTiff")
-    driver_options = ['COMPRESS=DEFLATE',
-                      'BIGTIFF=YES',
-                      'PREDICTOR=1',
-                      'TILED=YES',
-                      'COPY_SRC_OVERVIEWS=YES']
-
-    out_ds = driver.Create(output_fname, width, height, bands, gdal.GDT_Float32) #,
-    #    options=driver_options)
-
-    out_ds.SetGeoTransform(geotransform)
-    out_ds.SetProjection(projection)
-
-    # Write each band and set per-band metadata
-    for i in range(bands):
-        out_band = out_ds.GetRasterBand(i + 1)
-        out_band.WriteArray(xarray_data[uncert_var].data[i, :, :])
-        # Set per-band tags
-        for k, v in tags_per_band[i].items():
-            out_band.SetMetadataItem(k, v)
-        out_band.FlushCache()
-
-    out_ds.FlushCache()
-    out_ds = None
+    LOG.info('Script process Done!')
 
     # Print confirmation
-    print("Saved the weighted stddev as a Cloud Optimized GeoTIFF.")
+    LOG.info("Saved the weighted stddev as a Cloud Optimized GeoTIFF.")

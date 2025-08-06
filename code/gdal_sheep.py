@@ -44,9 +44,10 @@ def _get_FillValue(opn):
 
     return x
 
+
 def _get_times(tif_path):
     """
-    Get date/time from per-band metadata
+    Extract datetime64 values from per-band metadata in a GeoTIFF.
     """
     d = gdal.Open(tif_path)
     n_bands = d.RasterCount
@@ -54,19 +55,13 @@ def _get_times(tif_path):
     times = []
 
     for n_band in range(n_bands):
-        b = d.GetRasterBand(n_band+1)
+        b = d.GetRasterBand(n_band + 1)
         md = b.GetMetadata()
+        times.append(md['time'])
 
-        time = md['time']
-        times.append(time)
+    # Convert to pandas datetime Series and return as numpy array
+    return pd.to_datetime(times, format='%Y-%m-%dT%H:%M:%S').to_numpy()
 
-    # Convert list to DataFrame
-    times = pd.DataFrame(times, columns = ['time'])
-    # Change data type to np.datetime64
-    times.time = pd.to_datetime(times['time'],
-                                format='%Y-%m-%dT%H:%M:%S').to_numpy()
-
-    return times
 
 
 def gdal_dt(e):

@@ -1,4 +1,4 @@
-import json
+# import json
 import logging
 import shutil
 import os
@@ -8,10 +8,11 @@ import yaml
 import sys
 from datetime import datetime, timedelta
 from tqdm import tqdm
-from TATSSI.TATSSI.download.modis_downloader import get_modis_data
+# from TATSSI.TATSSI.download.modis_downloader import get_modis_data
 from WorldPeatland.settings import ROOT_DATA_DIR, EARTH_DATA_CRED
 from WorldPeatland.code.utils import create_dir
 
+from WorldPeatland.code.download_modis_apiv2 import download_modis_data, create_token_file_example, download_modis_data_interval
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
@@ -167,8 +168,6 @@ def get_modis_timestep(product, platform, path, start_date, end_date, format_til
     there is no need for now to download the daily data
     """
 
-    n_threads = 6
-
     # Create the list of doy for which to order the image
     interval = 8
     doy_list = list(range(1, 365 + 1, interval))
@@ -192,11 +191,44 @@ def get_modis_timestep(product, platform, path, start_date, end_date, format_til
     # Remove the duplicate start date if it's added
     date_list = list(dict.fromkeys(date_list))
 
+    product, collection = product.split('.')
+
     # Get the data
     for t in date_list:
         LOG.info(t)
-        get_modis_data(platform, product, format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
-        get_modis_data(platform, product, format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
+        t = t.strftime("%Y-%m-%d")
+
+        LOG.info(f"MODIS {product} Downloader - API v2")
+        LOG.info("=" * 50)
+
+        CONFIG = {
+            "product": product,
+            "collection": collection,
+            "tile": format_tiles,
+            "start_date": t,
+            "end_date": t,
+            "tile_dir": path
+        }
+
+        # Check if token file exists, create example if not
+        if not create_token_file_example():
+            exit(1)
+
+        # Display configuration
+        LOG.info("Configuration:")
+        for key, value in CONFIG.items():
+            print(f"  {key}: {value}")
+
+        # Download data
+        success = download_modis_data_interval(**CONFIG)
+
+        if success:
+            print("\n✓ Download process completed successfully!")
+        else:
+            print("\n✗ Download process failed. Please check your configuration and try again.")
+            exit(1)
+
+        # get_modis_data(platform, product, format_tiles, path, EARTH_DATA_CRED, t, t, n_threads)
 
 
 def run_command(cmd: str):
@@ -226,10 +258,7 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
 
     # create a subdirectory in the site folder to store modis link data
     path_site_modis = create_dir(site_directory, 'MODIS')
-
-    n_threads = 6
     for i in tqdm(range(len(products))):
-
         '''loop over all the MODIS product to be downloaded'''
 
         path_product = create_dir(path_modis, products[i]['product'])
@@ -241,7 +270,6 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
                 path_tile = create_dir(path_product, tile)
                 platform = products[i]['platform']
                 get_modis_timestep(product, platform, path_tile, start_date, end_date, tile)
-
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
 
                 try:
@@ -259,14 +287,46 @@ def get_modis_downloader(products, start_date, end_date, path_modis, site_direct
                 # where the data will be downloaded
                 path_tile = create_dir(path_product, tile)
 
+                product, collection = product.split('.')
+                LOG.info(f"MODIS {product} Downloader - API v2")
+                LOG.info("=" * 50)
+
+                CONFIG = {
+                    "product": product,
+                    "collection": collection,
+                    "tile": tile,
+                    "years": [start_date.year, end_date.year],
+                    "tile_dir": path_tile
+                }
+
+                # Check if token file exists, create example if not
+                if not create_token_file_example():
+                    exit(1)
+
+                # Display configuration
+                LOG.info("Configuration:")
+                for key, value in CONFIG.items():
+                    print(f"  {key}: {value}")
+
+                # Download data
+                success = download_modis_data(**CONFIG)
+
+                if success:
+                    print("\n✓ Download process completed successfully!")
+                else:
+                    print("\n✗ Download process failed. Please check your configuration and try again.")
+                    exit(1)
+
+
                 # Set the date strings as datetime.datetime so that get_modis_data works 
-                get_modis_data(products[i]['platform'], products[i]['product'], tile, path_tile, EARTH_DATA_CRED,
-                               start_date, end_date, n_threads)
+                # get_modis_data(products[i]['platform'], products[i]['product'], tile, path_tile, EARTH_DATA_CRED,
+                #                start_date, end_date, n_threads)
 
                 # where the data will be linked, this is in the site specific modis file 
                 path_site_product = create_dir(path_site_modis, f"{products[i]['product']}/{tile}")
 
                 try:
+                    # Create symlink
                     err_msg = run_command(f'ln -s {path_tile + "/*hdf"} {path_site_product}')
 
                     if err_msg:
@@ -369,8 +429,8 @@ def main(GEOJSON_PATH):
     update_config(dst_config, site_area, format_tiles, polygon, country)
 
     # set date strings as datetime objects both get_modis and get_sentinel will need it as datetime object
-    _start_date = datetime.strptime(start_date, '%Y-%m-%d')
-    _end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    _start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    _end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
 
     # create a data/MODIS directory to store all products not in a site specific file
     # path_modis = create_dir(ROOT_DATA_DIR, 'raw_tiles/MODIS')

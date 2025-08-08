@@ -17,17 +17,17 @@ def interpolate_block(block):
     """
     interpolate a single block and save it to disk.
     """
-    block.interpolate_na(dim='time', method='linear')
+    interpolated_block = block.interpolate_na(dim='time', method='linear')
     LOG.info(f'Linear interpolation successful')
-
+    return interpolated_block
 
 def process_smoothn_block(block, var_name, window_size, flag):
     """
     Smooth a single block and save it to disk.
     """
-    DW_smoothn_smooth_xarray(block, var_name, window_size, flag)
-    LOG.info(f'smoothn {window_size} successfully computed')
-
+    smoothed_block = DW_smoothn_smooth_xarray(block, var_name, window_size, flag)
+    LOG.info(f'smoothn {window_size} successful')
+    return smoothed_block
 
 def process_large_dask_chunks(dask_dataset, block_size, var_name, flag, output_dir):
     """
@@ -51,19 +51,20 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, flag, output_d
                 block = dask_dataset.isel(latitude=slice(lat_start, lat_end),
                                           longitude=slice(lon_start, lon_end))
 
+                # interpolation
+                block = interpolate_block(block)
+
                 # 1st smoother
                 window_size1 = 1.5
-                process_smoothn_block(block, var_name, window_size1, flag)
+                block = process_smoothn_block(block, var_name, window_size1, flag)
 
-                # interpolation
-                interpolate_block(block)
+                # replace negative values with 0
+                block = block.where(block >= 0, 0)
 
-                # 3rd smoother
-                window_size2 = 30
-                block_path_s1_linear_s2 = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.smoothn{window_size1}.linear.smoothn{window_size2}.nc"
-                process_and_save_block(block, block_path_s1_linear_s2, var_name, window_size2, flag)
+                block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.linear.smoothn{window_size1}.nc"
+                process_and_save_block(block, block_path, var_name, window_size1, flag)
 
-                processed_blocks.append(block_path_s1_linear_s2)
+                processed_blocks.append(block_path)
 
     logging.info('Opening all smoothed blocks in one xarray')
     processed_datasets = xr.open_mfdataset(processed_blocks, chunks={"latitude": 256, "longitude": 256})
@@ -150,7 +151,7 @@ def main(site_dir):
 
         LOG.info('The dask chunks have been processed')
 
-        fname = f'{var_name}.smoothn3.linear.smoothn30.tif'
+        fname = f'{var_name}.linear.smoothn1.5.tif'
         output_dir = os.path.join(interp_dir, fname)
 
         # set extract and set proj 4 to xarray
@@ -173,7 +174,7 @@ def main(site_dir):
         ds_dtr = ds_dtr.astype('float32')
         ds_dtr.attrs['crs'] = proj4_string
 
-        fname = f'{var_name}.smoothn3.linear.smoothn30.detrended.{period}.tif'
+        fname = f'{var_name}.linear.smoothn1.5.detrended.{period}.tif'
         output_dir = os.path.join(interp_dir, fname)
         save_xarray_old(output_dir, ds_dtr, var_name)
 

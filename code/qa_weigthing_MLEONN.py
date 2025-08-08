@@ -50,6 +50,7 @@ def process_large_dask_chunks(dask_datasets, block_size, nominal_uncert, unc_wei
     Process large Dask datasets by splitting into time chunks, applying weighting, and saving results.
     """
     mleo_arr, mask_arr = dask_datasets
+    mleo_arr = mleo_arr.astype('float32')
 
     latitude_chunks = range(0, mleo_arr.latitude.size, block_size)
     longitude_chunks = range(0, mleo_arr.longitude.size, block_size)
@@ -103,7 +104,9 @@ for _product in products:
     nominal_uncert_data = _product['nominal_uncert_data']
 
     # Paths to the interpolated and smoothed time series
-    data_file = f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/{variable}.smoothn3.linear.smoothn30.tif"
+
+    data_file = f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/{variable}.linear.smoothn1.5.tif"
+    LOG.info(f'Opening smoothed and interpolated data: {data_file}')
     data_file = glob(data_file)[0]
 
     # Open the mask monthly Geotif and put in one xarray
@@ -114,6 +117,8 @@ for _product in products:
     all_times = []
 
     for fpath in mask_monthly_tifs:
+
+        LOG.info(f'Opening mask: {fpath}')
         data = rioxarray.open_rasterio(fpath)
         data = data.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
         datasets.append(data)
@@ -123,7 +128,9 @@ for _product in products:
         all_times.extend(times)
 
     # Concatenate a long time axis
+    LOG.info(f'All mask monthly tifs are being concatinated')
     mask = xr.concat(datasets, dim='time')
+    LOG.info(f'All mask monthly tifs sucessfully concatinated')
 
     # Replace dummy time with real datetime
     mask = mask.assign_coords(time=all_times)
@@ -133,7 +140,7 @@ for _product in products:
     output_fname = osp.join(output_dir, output_fname)
 
     # Open the VRT file using rioxarray
-    mleo_data = rioxarray.open_rasterio(data_file).astype("float32")
+    mleo_data = rioxarray.open_rasterio(data_file)
     mleo_data = mleo_data.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
     mleo_data = mleo_data.assign_coords(time=all_times)
 
@@ -154,7 +161,7 @@ for _product in products:
 
     LOG.info('Begin block processing]')
     output_blocks_dir = create_dir(f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/",
-                                   'dask_processing_outputs')
+                                   'dask_processing_outputs_qa')
     data_stddev_weighted = process_large_dask_chunks(
         dask_datasets=[mleo_data, mask],  # list of the chunked datasets needed to calculate weighted unc
         block_size=block_size,  # Temporal block size

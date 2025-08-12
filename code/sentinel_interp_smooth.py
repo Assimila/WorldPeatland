@@ -58,9 +58,6 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, flag, output_d
                 window_size1 = 1.5
                 block = process_smoothn_block(block, var_name, window_size1, flag)
 
-                # replace negative values with 0
-                block = block.where(block >= 0, 0)
-
                 block_path = f"{output_dir}/smoothed_block_{lat_start}_{lon_start}.linear.smoothn{window_size1}.nc"
                 process_and_save_block(block, block_path, var_name, window_size1, flag)
 

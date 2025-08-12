@@ -29,6 +29,7 @@ attributes.
 
 # Parent directory containing the subfolders
 parent_folder = "/wp_data/sites/CentralKalimantan/Sentinel/datacube/S1_GRD"
+orbit_no = '105'
 
 # Regex pattern to extract the year-month from filenames
 date_pattern = re.compile(r"_(\d{4}-\d{2})\.")  # Match pattern for year-month in filenames
@@ -96,7 +97,7 @@ for subfolder in os.listdir(parent_folder):
                         os.rename(old_file, new_file)
                     else:
                         # If there are multiple files, merge them
-                        output_file = os.path.join(home_folder_path, f"S1_GRD_{subfolder}_{year_month}.tif")
+                        output_file = os.path.join(home_folder_path, f"S1_GRD_{subfolder}_{orbit_no}_{year_month}.tif")
 
                         # Extract metadata only from the first file
                         print(f"Extracting metadata from the first file: {files[0]}")

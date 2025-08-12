@@ -66,8 +66,8 @@ def process_large_dask_chunks(dask_datasets, block_size, nominal_uncert, unc_wei
                 lat_end = min(lat_start + block_size, mleo_arr.latitude.size)
                 lon_end = min(lon_start + block_size, mleo_arr.longitude.size)
 
-                mleo_block = mleo_arr.isel(latitude=slice(lat_start, lat_end),
-                                           longitude=slice(lon_start, lon_end))
+                mleo_block = np.abs(mleo_arr.isel(latitude=slice(lat_start, lat_end),
+                                           longitude=slice(lon_start, lon_end)))
 
                 mask_block = mask_arr.isel(latitude=slice(lat_start, lat_end),
                                            longitude=slice(lon_start, lon_end))

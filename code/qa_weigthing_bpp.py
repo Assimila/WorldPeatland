@@ -16,7 +16,7 @@ lst_day = {'product' : 'MYD11A1.061',
            'uncert_var' : 'LST_Day_StdDev_1km',
            'smooth_factor' : 0.5,
            'scaling_factor' : 0.02,
-           'weighting_factor' : 0.02,
+           'weighting_factor' : 0.2,
            'nominal_uncert_data' : 2.0}
 
 lst_night = {'product' : 'MYD11A1.061',
@@ -24,30 +24,32 @@ lst_night = {'product' : 'MYD11A1.061',
              'uncert_var' : 'LST_Night_StdDev_1km',
              'smooth_factor' : 0.5,
              'scaling_factor' : 0.02,
-             'weighting_factor' : 0.02,
+             'weighting_factor' : 0.2,
              'nominal_uncert_data' : 2.0}
 
 # Strahler et al. (1999) and Schaaf et al. (2002) report:
 # NIR band white-sky albedo RMSE ~0.02–0.05 in vegetated areas
-# nominal_uncert_data = 0.03
+# Since albedo in peatlands tend to be lower
+# nominal_uncert_data = 0.02
 albedo = {'product' : 'MCD43A3.061',
           'variable' : 'Albedo_WSA_Band2',
           'uncert_var' : 'Albedo_WSA_Band2_StdDev_500m',
           'smooth_factor' : 0.5,
           'scaling_factor' : 0.001,
-          'weighting_factor' : 0.03,
-          'nominal_uncert_data' : 0.005}
+          'weighting_factor' : 0.2,
+          'nominal_uncert_data' : 0.03}
 
+# Comparisons against in-situ spectral measurements and higher-resolution
+# sensors often find RMSE ~0.05 EVI units
 evi = {'product' : 'MOD13A2.061',
        'variable' : '1_km_16_days_EVI',
        'uncert_var' : '1_km_16_days_EVI_StdDev_1km',
        'smooth_factor' : 0.5,
        'scaling_factor' : 0.0001,
-       'weighting_factor' : 0.02,
+       'weighting_factor' : 0.2,
        'nominal_uncert_data' : 0.05}
 
 products = [lst_day, lst_night, albedo, evi]
-# products = [evi]
 
 for _product in products:
 
@@ -91,7 +93,8 @@ for _product in products:
         raise ValueError("Data and mask shapes do not match.")
 
     # Set uncertainties
-    data_stddev_weighted = xr.where(mask == 0, np.abs(data * weighting_factor),
+    data_stddev_weighted = xr.where(mask == 0,
+                                    data_stddev * (1 + weighting_factor),
                                     data_stddev)
 
     # Add the new weighted variable stddev as a new variable in the dataset

@@ -11,21 +11,25 @@ import rioxarray
 site = sys.argv[1]
 
 # MODIS LAI
+# ±0.5 LAI units (≈20%) is the commonly cited nominal uncertainty
 lai = {'product' : 'MCD15A3H.061',
        'variable' : 'Lai_500m',
        'uncert_var' : 'LaiStdDev_500m',
        'smooth_factor' : 1.5,
        'scaling_factor' : 0.1,
        'weighting_factor' : 0.2,
+       'nominal_uncertainty' : 0.5,
        'fill_value' : 255}
 
 # MODIS FAPAR
+# target accuracy is within 0.05–0.10 FAPAR units (≈10–20%)
 fapar = {'product' : 'MCD15A3H.061',
          'variable' : 'Fpar_500m',
          'uncert_var' : 'FparStdDev_500m',
          'smooth_factor' : 1.5,
          'scaling_factor' : 0.01,
          'weighting_factor' : 0.2,
+         'nominal_uncertainty' : 0.05,
          'fill_value' : 255}
 
 products = [lai, fapar]
@@ -38,6 +42,7 @@ for _product in products:
     smooth_factor = _product['smooth_factor']
     scaling_factor = _product['scaling_factor']
     weighting_factor = _product['weighting_factor']
+    nominal_uncertainty = _product['nominal_uncertainty']
     fill_value = _product['fill_value']
 
     # Paths to the VRT file and mask file
@@ -67,8 +72,9 @@ for _product in products:
                           | (lai_stddev == 0.0),
                           np.nan, lai_stddev) * scaling_factor
 
-    # If the uncert was not produced, set a 20% uncert of the LAI value
-    lai_stddev = xr.where(np.isnan(lai_stddev) & (lai > 0), lai * weighting_factor, lai_stddev)
+    # If the uncert was not produced, set  the nominal uncertainty
+    lai_stddev = xr.where(np.isnan(lai_stddev) & (lai > 0),
+                          nominal_uncertainty, lai_stddev)
 
     # Open the mask file using rioxarray
     mask = rioxarray.open_rasterio(mask_file)
@@ -87,7 +93,8 @@ for _product in products:
 
     # Add the new weighted LAI stddev as a new variable in the dataset
     xarray_data = lai.to_dataset(name=variable)
-    xarray_data[uncert_var] = lai_stddev_weighted
+    # xarray_data[uncert_var] = lai_stddev_weighted
+    xarray_data[uncert_var] = lai_stddev
 
     # Extract per-band tags using rasterio
     with rasterio.open(lai_file) as src:

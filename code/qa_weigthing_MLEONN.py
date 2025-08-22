@@ -22,9 +22,9 @@ site = sys.argv[1]
 # MLEONN lai RMSE: 0.7 for validation
 # Reference S2 ToolBox ATBD V2.0
 lai = {'variable': 'lai',
-       'uncertainty_variable':'lai_unc',
-       'weighting_factor': 0.02,
-       'nominal_uncert_data': 0.7}
+       'uncertainty_variable': 'lai_unc',
+       'weighting_factor': 0.2,
+       'nominal_uncert_data': 0.7}  # Global NNET RMSE value
 
 
 def _get_times(tif_path):
@@ -66,17 +66,19 @@ def process_large_dask_chunks(dask_datasets, block_size, nominal_uncert, unc_wei
                 lat_end = min(lat_start + block_size, mleo_arr.latitude.size)
                 lon_end = min(lon_start + block_size, mleo_arr.longitude.size)
 
-                mleo_block = np.abs(mleo_arr.isel(latitude=slice(lat_start, lat_end),
-                                           longitude=slice(lon_start, lon_end)))
+                mleo_block = mleo_arr.isel(latitude=slice(lat_start, lat_end),
+                                           longitude=slice(lon_start, lon_end))
 
                 mask_block = mask_arr.isel(latitude=slice(lat_start, lat_end),
                                            longitude=slice(lon_start, lon_end))
 
-                # Apply weighting where mask == 0
+
+                # xr.where(condition, if true, if false)
                 weighted_block = xr.where(
-                    mask_block == 0,
-                    mleo_block * unc_weight,
-                    xr.full_like(mleo_block, nominal_uncert)
+                    mask_block == 0,  # condition: mask_block == 0 (or False, meaning pixel not masked)
+                    nominal_uncert,  # if pixel not masked std dev = nominal uncertainty
+                    # if pixel is masked std dev will be an inflated  uncertainty
+                    nominal_uncert + (nominal_uncert * unc_weight)
                 )
 
                 result = weighted_block.compute()

@@ -438,6 +438,7 @@ def main(GEOJSON_PATH):
     path_modis = '/data/MODIS'
     LOG.info(f'Starting to download MODIS data for {site_area}')
     get_modis_downloader(products, _start_date, _end_date, path_modis, site_directory, site_area, format_tiles)
+    LOG.info(f'DOWNLOAD SUCCESSFULLY DONE FOR {site_area}')
 
 
 if __name__ == "__main__":

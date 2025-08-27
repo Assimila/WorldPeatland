@@ -8,64 +8,12 @@ from datetime import datetime as dt
 import subprocess
 import logging
 from osgeo import gdal
-from WorldPeatland.code.gdal_sheep import create_xarr
+from WorldPeatland.code.gdal_sheep import create_xarr, gdal_dt
 from WorldPeatland.code.save_xarray_to_gtiff_old import save_tiff
 from WorldPeatland.code.utils import create_dir
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-
-
-def gdal_dt(e, time):
-    '''
-    gdal_dt function will open the tif file as an osegeo gdal dataset
-
-    INPUTS:
-        - e (str or tiff) - path the tiff file or the gdal dataset you want to
-            open and save its datetimes
-        - time (string) - check how the time variable is written in the tiff metadata
-    Outputs:
-        - arr (np.array) - return arr of the gdal dataset
-        - dts (list) - list of the datetimes
-        - saved_opn (osegeo gdal dataset) - saved dataset for its srs
-    '''
-
-    # Create an empty list to store the datatimes
-    dts = []
-
-    # Check if the input is a str which would be the tif file
-    # otherwise it is already an opened gdal dataset
-    if type(e) == str:
-        # open the Dataset
-        opn = gdal.Open(e)
-    else:
-        opn = e
-
-    for i in range(1, opn.RasterCount + 1):
-        rst = opn.GetRasterBand(i)
-        meta = rst.GetMetadata()
-
-        # following fill in with the corresponding format
-        # 'time' check the metadata of the tiff to see what they call
-        # could also be 'RANGEBEGINNINGDATE'
-        # the time data
-        x = meta[time]
-        # also check the metadata to see how is the format of datetime data
-        dt_format = '%Y-%m-%dT%H:%M:%S.000000000'
-        # dt_format = '%Y-%m-%d %H:%M:%S'
-        # dt_format = '%Y-%m-%d'
-        t = dt.strptime(x, dt_format)
-
-        # append it to the list
-        dts.append(t)
-
-    # save the last osegeodataset for its srs
-    saved_opn = opn
-
-    # open the array
-    arr = opn.ReadAsArray()
-
-    return arr, dts, saved_opn
 
 
 def extract_data_var(opn):
@@ -95,7 +43,7 @@ def create_xarr_from_tif_path(tif_path):
         - ds (xarray.Dataset) - xarray dataset of the tif data variable
     """
 
-    arr, dts, saved_opn = gdal_dt(tif_path, 'time')
+    arr, dts, saved_opn = gdal_dt(tif_path)
     # Extract name of the variable from the gdal obj
     var_name = extract_data_var(saved_opn)
     ds = create_xarr(saved_opn, var_name, arr, dts)

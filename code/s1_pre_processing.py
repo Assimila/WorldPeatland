@@ -223,10 +223,9 @@ def process_large_dask_chunks(dask_dataset, block_size, var_name, window_size, f
     LOG.info('Finish processing all blocks')
     # Recombine the saved blocks
     LOG.info('Opening all smoothed blocks nc in one xarray')
-    smoothed_datasets = [xr.open_dataset(path) for path in smoothed_blocks]
-    combined = xr.combine_by_coords(smoothed_datasets)
+    smoothed_datasets = xr.open_mfdataset(smoothed_blocks, chunks={"latitude": 256, "longitude": 256})
     LOG.info('Smoothened blocks successfully combined')
-    return combined
+    return smoothed_datasets
 
 
 def main(site_fpath, orbit, orbit_no, period):
@@ -264,14 +263,10 @@ def main(site_fpath, orbit, orbit_no, period):
         monthly_outputs.append(output_utm)
         save_xarray_old(output_utm, ds_cr, 'cr')
 
-    LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
-    ds_all_years = concat_xr(monthly_outputs, 'cr')
+    proj4_string = get_proj4_from_tif(monthly_outputs[2])
 
-    # smoothn should happen on all the time series per orbit
-    # Chunk the dataset to enable Dask computation
-    LOG.info('Begin dask chunking')
-    # -1: no chunking along this dimension
-    dask_chunks = ds_all_years.chunk({"latitude": 10, "longitude": 10, 'time': -1})
+    LOG.info('Open all Cross ratio tiffs in one xr before dask processing')
+    dask_chunks = concat_xr(monthly_outputs, 'cr')
 
     LOG.info('Begin block smoothing')
     output_blocks_dir = create_dir(output_dir, 'output_blocks')
@@ -284,7 +279,7 @@ def main(site_fpath, orbit, orbit_no, period):
         output_dir=output_blocks_dir
     )
 
-    smoothed_result.to_netcdf("smoothed_dataset.nc")
+    # smoothed_result.to_netcdf("smoothed_dataset.nc")
     LOG.info('The dask chunks have been smoothened')
     smoothed_result.attrs['crs'] = proj4_string
 
@@ -293,7 +288,7 @@ def main(site_fpath, orbit, orbit_no, period):
 
     output_ts_dir = create_dir(output_dir, 'timeSeries')
     fname = output_ts_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_smoothn.tif'
-    # save_xarray_old(fname, smoothed_result, f'cr')
+    save_xarray_old(fname, smoothed_result, f'cr')
     LOG.info(f'Cross Ratio {orbit} {orbit_no} Smoothened and saved here: {fname}')
 
     # Detrend with a period of 45, check how many observations do we have per year

@@ -4,10 +4,12 @@ from osgeo import gdal_array
 import numpy as np
 from datetime import datetime as dt
 import xarray as xr
+import gc
 import subprocess
 import re
 import logging
 import pandas as pd
+from typing import List
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -43,25 +45,6 @@ def _get_FillValue(opn):
         raise KeyError("No valid fill value key found in metadata.")
 
     return x
-
-
-def _get_times(tif_path):
-    """
-    Extract datetime64 values from per-band metadata in a GeoTIFF.
-    """
-    d = gdal.Open(tif_path)
-    n_bands = d.RasterCount
-
-    times = []
-
-    for n_band in range(n_bands):
-        b = d.GetRasterBand(n_band + 1)
-        md = b.GetMetadata()
-        times.append(md['time'])
-
-    # Convert to pandas datetime Series and return as numpy array
-    return pd.to_datetime(times, format='%Y-%m-%dT%H:%M:%S').to_numpy()
-
 
 
 def gdal_dt(e):
@@ -222,7 +205,7 @@ def gdal_stack_dt(lt):
         saved_opn = opn
 
         # open the array
-        arr = opn.ReadAsArray() #xoff=0, yoff = 0, xsize=100, ysize=100) # add these arguments to take only a chunk of
+        arr = opn.ReadAsArray()  # xoff=0, yoff = 0, xsize=100, ysize=100) # add these arguments to take only a chunk of
                                                                         # the dataset spatially
 
         # check the dimensions of the array because cannot concatenate
@@ -468,32 +451,9 @@ def transform_save(orbit, saved_path):
     return output_sinu
 
 
-def _get_times(tif_path):
-    """
-    Get date/time from per-band metadata
-    """
-    d = gdal.Open(tif_path)
-    n_bands = d.RasterCount
-
-    times = []
-
-    for n_band in range(n_bands):
-        b = d.GetRasterBand(n_band+1)
-        md = b.GetMetadata()
-
-        time = md['time']
-        times.append(time)
-
-    # Convert list to DataFrame
-    times = pd.DataFrame(times, columns = ['time'])
-    # Change data type to np.datetime64
-    times.time = pd.to_datetime(times['time'],
-                                format='%Y-%m-%dT%H:%M:%S').to_numpy()
-
-    return times
-
-
 def load_one_ds(fpath, data_var):
+
+    """Could run it like this datasets = [load_one_ds(fp, data_var) for fp in tif_fnames] """
     LOG.info(fpath)
     times = _get_times(fpath)
 
@@ -507,9 +467,188 @@ def load_one_ds(fpath, data_var):
 
     return ds
 
+
+def _get_times(tif_path):
+    """
+    Get date/time from per-band metadata for a single TIF file.
+    """
+    LOG.info(f'Extracting time metadata for {tif_path}')
+    d = gdal.Open(tif_path)
+    n_bands = d.RasterCount
+
+    times = []
+
+    # GDAL bands are 1-indexed
+    for n_band in range(1, n_bands + 1):
+        b = d.GetRasterBand(n_band)
+        md = b.GetMetadata()
+
+        # Check if 'time' metadata exists to avoid errors
+        if 'time' in md:
+            times.append(md['time'])
+        else:
+            # Handle cases where 'time' metadata is missing
+            times.append(None)
+    # Convert list to DataFrame
+    times = pd.DataFrame(times, columns=['time'])
+    # Change data type to np.datetime64
+    times.time = pd.to_datetime(times['time'],
+                                format='%Y-%m-%dT%H:%M:%S').to_numpy()
+    return times
+
+
+def preprocess_tif(da):
+    """
+    A preprocess function for xarray.open_mfdataset.
+    This function will be applied to each dataset as it's opened.
+    It adds a 'time' dimension and coordinate from the band metadata.
+    """
+    # Get the original file path from the dataset's encoding
+    tif_path = da.encoding['source']
+    LOG.info(f'Extracting metadata for {tif_path}')
+
+    # Get the times for this specific file
+    times = _get_times(tif_path)
+
+    da = da.rename({'x': 'longitude', 'y': 'latitude', 'band': 'time'})
+    LOG.info(f'Setting time metadata into xr for {tif_path}')
+    da['time'] = times.time.values
+    return da
+
+
 def concat_xr(tif_fnames, data_var):
+    """
+    Concatenate multiple TIF files into a single xarray Dataset
+    using the preprocess function.
+    """
 
-    datasets = [load_one_ds(fp, data_var) for fp in tif_fnames]
+    LOG.info('Begin dask chunking for concat')
+    ds = xr.open_mfdataset(
+        tif_fnames,
+        preprocess=preprocess_tif,
+    )
 
-    # Concatenate along 'time'
-    return xr.concat(datasets, dim='time')
+    # Rename the data variable
+    LOG.info(f'Set data variable name as {data_var}')
+    ds = ds.rename({'band_data': data_var})
+
+    ds_optimised = ds.chunk({"longitude": 10, "latitude": 10, "time": -1})
+
+    LOG.info('Dask chunking successful for concat')
+
+    del ds
+    gc.collect()
+
+    return ds_optimised
+
+
+# ---- THE DIAGNOSTIC CHECK FUNCTION ----
+def are_longitudes_equal(arr1, arr2):
+    """
+    Checks if the 'longitude' coordinates of two xarray DataArrays are equal.
+
+    Args:
+        arr1 (xr.DataArray): The first xarray DataArray.
+        arr2 (xr.DataArray): The second xarray DataArray.
+
+    Returns:
+        bool: True if longitudes are equal, False otherwise.
+    """
+    # First, check if the longitude coordinate exists in both arrays
+    if 'longitude' not in arr1.coords or 'longitude' not in arr2.coords:
+        print("Error: 'longitude' coordinate not found in one or both arrays.")
+        return False
+
+    # Check if the number of values in the coordinates are the same
+    if arr1.longitude.size != arr2.longitude.size:
+        print("Longitude coordinates have different sizes.")
+        print(f"Size of arr1.longitude: {arr1.longitude.size}")
+        print(f"Size of arr2.longitude: {arr2.longitude.size}")
+        return False
+
+    # Finally, check if the coordinate values are equal.
+    # We use .all() to ensure every single value is identical.
+    if (arr1.longitude.values == arr2.longitude.values).all():
+        print("Success: Longitude coordinates are identical.")
+        return True
+    else:
+        print("Failure: Longitude coordinates are not identical.")
+        print("Array 1 longitude:", arr1.longitude.values)
+        print("Array 2 longitude:", arr2.longitude.values)
+        return False
+
+
+def is_time_monotonically_ordered_with_debug(datasets: List[xr.Dataset]) -> bool:
+    """
+    Checks if the time coordinate is monotonically increasing across a list of xarray Datasets.
+    Prints the problematic time values if an error is found.
+
+    Args:
+        datasets (List[xr.Dataset]): A list of xarray Datasets to check.
+
+    Returns:
+        bool: True if the time coordinate is monotonically increasing, False otherwise.
+
+    i.e.
+    # Assuming 'datasets' is your list of xarray datasets
+    is_time_monotonically_ordered_with_debug(datasets)
+
+    """
+    if not datasets:
+        return True  # An empty list is considered ordered.
+
+    # 1. Check if time exists in all datasets
+    for i, ds in enumerate(datasets):
+        if 'time' not in ds.coords:
+            print(f"Error: 'time' coordinate not found in dataset at index {i}.")
+            return False
+
+    # 2. Check within each dataset
+    for i, ds in enumerate(datasets):
+        time_values = ds.coords['time'].values
+
+        # Handle empty time coordinates
+        if time_values.size == 0:
+            continue
+
+        # Find the first unsorted pair
+        is_sorted_within = np.all(time_values[:-1] <= time_values[1:])
+
+        if not is_sorted_within:
+            print(f"Error: 'time' coordinate is not sorted within dataset at index {i}.")
+
+            # Find the first non-monotonic pair
+            problem_indices = np.where(time_values[:-1] > time_values[1:])[0]
+            if problem_indices.size > 0:
+                first_problem_index = problem_indices[0]
+                problem_pair = (time_values[first_problem_index], time_values[first_problem_index + 1])
+                print(
+                    f"  First non-monotonic pair found at indices {first_problem_index} and {first_problem_index + 1}:")
+                print(f"  Value at index {first_problem_index}: {problem_pair[0]}")
+                print(f"  Value at index {first_problem_index + 1}: {problem_pair[1]}")
+                print(f"  Full time values for this dataset: {time_values}")
+            return False
+
+    # 3. Check across datasets
+    # Create a single array of all time coordinates
+    all_times = np.concatenate([ds.coords['time'].values for ds in datasets])
+
+    # Check if this combined array is monotonically increasing
+    is_sorted_across = np.all(all_times[:-1] <= all_times[1:])
+    if not is_sorted_across:
+        print("Error: 'time' coordinate is not sorted across all datasets.")
+
+        # Find the first non-monotonic pair
+        problem_indices = np.where(all_times[:-1] > all_times[1:])[0]
+        if problem_indices.size > 0:
+            first_problem_index = problem_indices[0]
+            problem_pair = (all_times[first_problem_index], all_times[first_problem_index + 1])
+            print(
+                f"  First non-monotonic pair found at indices {first_problem_index} and {first_problem_index + 1} of the combined array:")
+            print(f"  Value at index {first_problem_index}: {problem_pair[0]}")
+            print(f"  Value at index {first_problem_index + 1}: {problem_pair[1]}")
+
+        return False
+
+    print("Success: 'time' coordinate is monotonically increasing across all datasets.")
+    return True

@@ -230,7 +230,7 @@ def main(site_dir):
     target_shape = __get_SR_arr_from_band_no(target_b02_tif, i=None)
     target_proj4_string = get_proj4_from_tif(target_b02_tif)
 
-    for month_b02_tif in B02_tif_files_list[14:]:  # TODO removed [60:]
+    for month_b02_tif in B02_tif_files_list:  # TODO removed [60:]
         # extract timestep from the filename
         timestep = get_timestep_from_tif(month_b02_tif)
         LOG.info(f'Starting processing this timestep: {timestep}')
@@ -290,6 +290,7 @@ def main(site_dir):
         SCL_resampled = SCL_gdalobj.ReadAsArray()  # array dtype=uint8
 
         # Create masks for each class based on SCL
+        is_nodata = (SCL_resampled == 0).astype(bool)
         is_water = (SCL_resampled == 6).astype(bool)
         is_snow = (SCL_resampled == 11).astype(bool)
         is_cirrus = (SCL_resampled == 10).astype(bool)
@@ -303,7 +304,7 @@ def main(site_dir):
 
         # True or 1 is a masked pixel. False or 0 is not masked
         mask = (
-                is_cloud | is_shadow | is_snow | is_cirrus |
+                is_nodata | is_cloud | is_shadow | is_snow | is_cirrus |
                 (lai_array > 8.0) | (lai_array < 0) | is_water
         )  # dtype numpy array
 

@@ -157,6 +157,7 @@ def find_file(glob_pattern: str, retries: int = 8) -> str:
 
 
 def create_subset(input_dirs, output_dir, extent, band):
+
     for i in range(len(input_dirs)):
         fname = find_file(input_dirs[i])
 

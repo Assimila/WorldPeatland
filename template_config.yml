@@ -1,7 +1,7 @@
 - site_area: 
   country: 
   start_date: '2013-06-01' # 'yyyy-mm-dd'
-  end_date: '2024-06-30'  # 'yyyy-mm-dd'
+  end_date: '2024-12-31'  # 'yyyy-mm-dd'
   tiles: []
   bbox:
   
@@ -10,6 +10,7 @@
   - name: Land Surface Temperature (LST)
     product: MYD11A1.061
     platform: MOLA
+    fill_value: '0'
     scaling_factor: '0.02'
     qa_def: ['QC_Day','QC_Night']
     data_var: ['_LST_Day_1km', '_LST_Night_1km']
@@ -19,6 +20,7 @@
   - name: Enhance Vegetation Index (EVI)
     product: MOD13A2.061
     platform: MOLT
+    fill_value: '-3000'
     scaling_factor: '0.0001'
     qa_def: ['_1_km_16_days_VI_Quality']
     data_var: ['_1_km_16_days_EVI']
@@ -28,6 +30,7 @@
   - name: Leaf Area Index (LAI)
     product: MCD15A3H.061
     platform: MOTA
+    fill_value: '255'
     scaling_factor: ['0.1', '0.01']
     qa_def: ['FparLai_QC', 'FparLai_QC']
     data_var: ['_Lai_500m', '_Fpar_500m']
@@ -37,6 +40,7 @@
   - name: Albedo
     product: MCD43A3.061
     platform: MOTA
+    fill_value: '32767'
     scaling_factor: '0.001'
     qa_def: ['BRDF_Albedo_Band_Mandatory_Quality_Band2']
     data_var: ['_Albedo_WSA_Band2']
@@ -46,6 +50,7 @@
   - name: Net EvapoTranspiration (ET)
     product: MOD16A2GF.061
     platform: MOLT
+    fill_value: '32767'
     scaling_factor: '0.1'
     qa_def: ['ET_QC_500m']
     data_var: ['_ET_500m']
@@ -57,8 +62,8 @@
     platform: MOTA
     data_var: ['Snow_BRDF_Albedo']
     period: '45'
-  - name: Burned Areas (BA)
-    product: MCD64A1.061
-    platform: MOTA
-    qa_def: ['QA']
-    data_var: ['Burn Date']
+#  - name: Burned Areas (BA)
+#    product: MCD64A1.061
+#    platform: MOTA
+#    qa_def: ['QA']
+#    data_var: ['Burn Date']

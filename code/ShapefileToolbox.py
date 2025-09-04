@@ -257,7 +257,9 @@ class ShapefileToolbox():
     def __find_epsg_code(self, wgs_cent):
         
         # open the shapefile with all the different UTM zones contained
-        path = '../utmzone-polygon/utmzone-polygon.shp'
+        # TODO change absolute path, package this to be abel to run with the code
+        # or get a library
+        path = '/workspace/WorldPeatland/utmzone-polygon/utmzone-polygon.shp'
         utm_shp = ogr.Open(path)
        
         utm_lyr = utm_shp.GetLayer()

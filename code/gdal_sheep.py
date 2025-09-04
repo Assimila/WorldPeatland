@@ -532,7 +532,7 @@ def concat_xr(tif_fnames, data_var):
     LOG.info(f'Set data variable name as {data_var}')
     ds = ds.rename({'band_data': data_var})
 
-    ds_optimised = ds.chunk({"longitude": 10, "latitude": 10, "time": -1})
+    ds_optimised = ds.chunk({"longitude": 250, "latitude": 250, "time": -1})
 
     LOG.info('Dask chunking successful for concat')
 

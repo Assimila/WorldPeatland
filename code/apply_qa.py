@@ -14,9 +14,9 @@ from TATSSI.TATSSI.notebooks.helpers.time_series_interpolation import \
     TimeSeriesInterpolation
 from WorldPeatland.code.utils import create_dir
 import sys
+
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
-
 
 ''' 
 apply_qa its the 3rd code to run will apply the qa settings to the MODIS data time series generated in code 2 
@@ -25,8 +25,7 @@ then it will INTERPOLATE the cleaned time series
 
 
 def main(site_directory, qa_path):
-
-    # get the specific config path for this site 
+    # get the specific config path for this site
     # to get the dates and the products
 
     # get the site name from site_fpath

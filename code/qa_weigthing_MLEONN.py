@@ -157,9 +157,9 @@ for _product in products:
         raise ValueError("Data and mask shapes do not match.")
 
     # Apply chunking before any computation
-    block_size = 100
-    mleo_data = mleo_data.chunk({'time': -1, "latitude": 5, "longitude": 5})
-    mask = mask.chunk({'time': -1, "latitude": 5, "longitude": 5})
+    block_size = 250
+    mleo_data = mleo_data.chunk({'time': -1, "latitude": 250, "longitude": 250})
+    mask = mask.chunk({'time': -1, "latitude": 250, "longitude": 250})
 
     LOG.info('Begin block processing]')
     output_blocks_dir = create_dir(f"/wp_data/sites/{site}/Sentinel/MSIL2A/datacube/MLEONN/{variable}/interpolated/",

@@ -35,6 +35,7 @@ def process_and_save_block(block, save_path, var_name, window_size, flag):
 
     LOG.info(f'smoothn {window_size} successful')
     smoothed_block.to_netcdf(save_path)
+    smoothed_block = smoothed_block.astype('float32')
     LOG.info(f'{save_path} successfully saved')
 
 def process_large_dask_chunks(dask_dataset, block_size, var_name, flag, output_dir):
@@ -102,6 +103,7 @@ def process_large_dask_chunks_2(dask_dataset, block_size, var_name, period, outp
                 save_path = f"{output_dir}/{lat_start}_{lon_start}.dtr.{period}.nc"
 
                 result = block.rolling(time=period, min_periods=1, center=True).mean()
+                result = result.astype('float32')
                 result.to_netcdf(save_path)
                 # result = result.to_dataset(name=var_name)
 
@@ -134,6 +136,7 @@ def main(site_dir):
         tif_files = sorted(glob(os.path.join(p, "*.tif")))
         # Load and stack the files
         dask_chunks = concat_xr(tif_files, var_name)
+        dask_chunks = dask_chunks.astype('float32')
         # create directory to interpol
         interp_dir = create_dir(p, 'interpolated')
 
@@ -141,7 +144,7 @@ def main(site_dir):
         output_blocks_dir = create_dir(interp_dir, 'dask_processing_outputs')
         processed_result = process_large_dask_chunks(
             dask_dataset=dask_chunks,
-            block_size=10,  # Spatial block size
+            block_size=250,  # Spatial block size
             var_name=var_name,  # Variable to smooth
             flag=True,  # Smoothing flag
             output_dir=output_blocks_dir,
@@ -154,15 +157,16 @@ def main(site_dir):
 
         # set extract and set proj 4 to xarray
         get_proj4_from_tif(tif_files[0], xarray=processed_result)
+        processed_result = processed_result.astype('float32')
         save_xarray_old(output_dir, processed_result, var_name)
 
         # Detrend with a period of 73, check how many observations do we have per year
-        dask_chunks = processed_result.chunk({"time": -1, "latitude": 10, "longitude": 10})
+        dask_chunks = processed_result.chunk({"time": -1, "latitude": 250, "longitude": 250})
         period = 182
         output_blocks_dir = create_dir(interp_dir, 'dask_processing_outputs_dtr')
         ds_dtr = process_large_dask_chunks_2(
             dask_dataset=dask_chunks,
-            block_size=10,  # Spatial block size
+            block_size=250,  # Spatial block size
             var_name=var_name,  # Variable to smooth
             period=period,  # Smoothing flag
             output_dir=output_blocks_dir,

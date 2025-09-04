@@ -157,10 +157,6 @@ def DW_smoothn_smooth_xarray(in_ds, var2smooth, window, isrobust):
     """
     print(in_ds[var2smooth].values.shape)
 
-    # Retrieve dimensions
-    # lat_size = in_ds.dims['latitude']
-    # lon_size = in_ds.dims['longitude']
-
     # Handle empty or all-NaN cases
     if in_ds[var2smooth].size == 0:
         return in_ds
@@ -257,7 +253,7 @@ def main(site_fpath, orbit, orbit_no, period):
 
         # TODO think about if 2 zones for one site
         # then will have to get the zone that is covering the largest area
-        proj4_string = get_proj4_from_tif(file, xarray=ds_cr)
+        get_proj4_from_tif(file, xarray=ds_cr)
 
         output_utm = output_dir + f'/cross_ratio_{orbit}_{orbit_no}_utm_{timestep}.tif'
         monthly_outputs.append(output_utm)
@@ -272,7 +268,7 @@ def main(site_fpath, orbit, orbit_no, period):
     output_blocks_dir = create_dir(output_dir, 'output_blocks')
     smoothed_result = process_large_dask_chunks(
         dask_dataset=dask_chunks,
-        block_size=100,  # Spatial block size
+        block_size=250,  # Spatial block size
         var_name="cr",  # Variable to smooth
         window_size=3,  # Smoothing window size
         flag=True,  # Smoothing flag

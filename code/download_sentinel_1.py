@@ -227,7 +227,7 @@ def sentinel_file_checker(path_sentinel, site_area):
     """
 
     # TODO for now only checking for VH_asc might need to check all other bands?
-    l = sorted(glob.glob(path_sentinel + f'/datacube/S1_GRD/VH_ASCENDING/{site_area}/*'))
+    l = sorted(glob.glob(path_sentinel + f'/datacube/S1_GRD/VH_DESCENDING/{site_area}/*'))
 
     dt_l = []
     for f in range(len(l)):
@@ -271,10 +271,9 @@ def generate_dates(start_date, end_date):
             month += 1
 
 
-def get_sentinel(site_area, site_directory, geojson_path, project):
+def get_sentinel(site_area, site_directory, geojson_path, rel_orbit, project):
     """ Download through GEE S1_GRD data only"""
 
-    rel_orbit = 29
     # create a subdirectory in the site folder to store sentinel data
     path_sentinel = create_dir(site_directory, 'Sentinel')
 
@@ -390,7 +389,7 @@ def read_config_cred():
     return username, password
 
 
-def main(geojson_path, output_dir):
+def main(geojson_path, output_dir, orbit_no):
 
 
     # check if GeoJson file exists
@@ -429,21 +428,23 @@ def main(geojson_path, output_dir):
     # https://developers.google.com/earth-engine/datasets/catalog/sentinel
 
     LOG.info(f'MODIS data download completed for {site_area}')
-    get_sentinel(site_area, site_directory, geojson_path, project='worldpeatland')
+    orbit_no = int(orbit_no)
+    get_sentinel(site_area, site_directory, geojson_path, orbit_no, project='worldpeatland')
 
-    get_viirs_archive(start_date, country, site_area, site_directory)
+    # get_viirs_archive(start_date, country, site_area, site_directory)
 
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
-        print("Usage: python script.py <geojson_path> <output_dir>")  # the user has to input two arguments
+    if len(sys.argv) != 4:
+        print("Usage: python script.py <geojson_path> <output_dir> <orbit_no>")  # the user has to input two arguments
     else:
         # location of the second item in the list which is the first argument geojson site location
         geojson_path = sys.argv[1]
         # location of output downloaded data 3rd item in the list which is the 2nd argument
         output_dir = sys.argv[2]
-        main(geojson_path, output_dir)
+        orbit_no = sys.argv[3]
+        main(geojson_path, output_dir, orbit_no)
 
 # you should be in directory where the script is
 # if you want to change the dates of downloads you should access the template config and change the dates in it

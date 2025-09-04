@@ -90,6 +90,7 @@ def get_ts(site_directory, json_path):
 
     # Getting the list of directories 
     dir_ = os.listdir(modis_dir)
+    # dir_ = ['MCD15A3H.061']
 
     # Checking if the list is empty or not 
     if len(dir_) == 0:

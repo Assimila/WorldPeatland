@@ -13,6 +13,7 @@ import osgeo
 import numpy as np
 import json
 import shapely
+import shapely.geometry
 
 class ShapefileToolboxException(Exception):
     pass

@@ -3,12 +3,8 @@ import datetime as dt
 import xarray as xr
 import os
 import ee
-import osgeo
 import subprocess
-import shapely
-import rioxarray    
-import shapely
-import shapely.geometry
+import rioxarray
 import glob
 import time
 import sys
